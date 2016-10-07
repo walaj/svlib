@@ -34,3 +34,4 @@ stamp-h1
 config.status
 Makefile
 *.pico
+src/svlib

@@ -2,7 +2,7 @@
 AC_PREREQ(2.59) ## specificy version of autoconf
 AC_INIT(bxtools, 0.0, jwala@broadinstitute.org)
 AM_INIT_AUTOMAKE(foreign)
-AC_CONFIG_SRCDIR([src/bxtools.cpp])
+AC_CONFIG_SRCDIR([src/svlib.cpp])
 AC_CONFIG_HEADER([config.h])
 AM_MAINTAINER_MODE([disable])
 
