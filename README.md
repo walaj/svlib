@@ -31,7 +31,11 @@ Description
 ===========
 
 ### vcftobedpe
-Convert a BND formatted SV VCF into a BEDPE
+Convert a BND formatted SV VCF into a BEDPE. Output format will be:
+```bash
+chr1 pos1 pos1 chr2 pos2 pos2 id 0 str1 str2 info genotypes
+```
+Examples:
 ```bash
 ## convert a snowman vcf and sort with bedtools
 svlib vcftobedpe a.snowman.sv.vcf | sortBed -i stdin
@@ -40,25 +44,30 @@ svlib vcftobedpe a.snowman.sv.vcf | sortBed -i stdin
 ### sim
 Simulate rearrangements and indels
 ```bash
-svlib sim 
+svlib sim -G $REFHG19 -s 42 -R 1000 -X 10000 -A mysim
 ```
 
 ### realigntest
 Test the ability of an aligner to realign an SV contig
 ```bash
-svlib realigntest
+svlib realigntest -G $REFHG19 -b some.bam > sim.fasta
+## align sim.fasta with some aligner (eg BWA) to something like sim.bam
+svlib realigntest -G $REFHG19 -E sim.bam > results
 ```
 
 ### seqtovcf
-Call SVs and indels from an qname sorted BAM of long sequence alignments
+Call SVs and indels from a qname sorted BAM of long sequence alignments
 ```bash
-svlib seqtovcf
+CORES=10
+TUM=tumor.shortreads.bam ## eg standard Illumina reads for scoring/genotyping
+NORM=normal.shortreads.bam ## should be coordinate sorted
+svlib seqtovcf qsorted.contigs.bam -p $CORES -t $TUM -n $NORM -a output_id -G $REFHG19
 ```
 
 Attributions
 ============
 
-svlib is developed and maintained by Jeremiah Wala (jwala@broadinstitute.org) --  Rameen Berkoukhim's lab -- Dana Farber Cancer Institute, Boston, MA
+*svlib* is developed and maintained by Jeremiah Wala (jwala@broadinstitute.org) --  Rameen Berkoukhim's lab -- Dana Farber Cancer Institute, Boston, MA
 
 This project was developed in collaboration with the Cancer Genome Analysis team at the Broad Institute. Particular thanks to:
 * Cheng-Zhong Zhang (Matthew Meyerson Lab)

@@ -38,7 +38,7 @@ static int sample_number = 0;
 
 static SeqLib::BamHeader hdr;
 
-static const char* shortopts = "hp:P:n:t:G:a:";
+static const char* shortopts = "hp:P:n:t:G:a:m:";
 static const struct option longopts[] = {
   { "help",                    no_argument, NULL, 'h' },
   { "case-bam",                required_argument, NULL, 't' },
@@ -46,18 +46,27 @@ static const struct option longopts[] = {
   { "pad",                     required_argument, NULL, 'P' },
   { "cores",                   required_argument, NULL, 'p' },
   { "reference-genome",        required_argument, NULL, 'G' },
+  { "max-coverage",            required_argument, NULL, 'm' },
   { "analysis-id",             required_argument, NULL, 'a' },
   { NULL, 0, NULL, 0 }
 };
 
 static const char *RUN_SEQTOVCF_MESSAGE =
-"Usage: svlib seqtovcf <BAM> [OPTION]\n\n"
+"Usage: svlib seqtovcf <BAM> -G <REF> [OPTION]\n\n"
 "  Description: Produce SV calls directly from alignment of long-reads to a genome\n"
+"  NOTE: The input BAM must be qname sorted\n"
+"        The optinal input short-read BAMs must be coordinate sorted and indexed\n"
 "\n"
+"  Required input\n"
+"  -G, --reference-genome              An indexed reference genome\n"
 "  General options\n"
 "  -h, --help                          Display this help and exit\n"
 "  -p, --cores                         Number of cores to run [1]\n"
+"  -t, --case-bam                      A case (eg tumor) BAM of short reads for scoring / genotyping. Accepts multiple\n"
+"  -n, --control-bam                   A control (eg normal) BAM of short reads for scoring / genotyping. Accepts multiple\n"
 "  -P, --pad                           Distance to look outside of contig region for supporting reads [100]\n"
+"  -m, --max-coveage                   Downsample reads to this coverage when extracting for scoring/genotyping [100]\n"
+"  -a, --analysis-id                   A unique analysis id to prepend output files with [s2v]\n"
 "\n";
 
 std::string bamOptParse(std::map<std::string, std::string>& obam, std::istringstream& arg, int sample_number, const std::string& prefix) {
@@ -346,6 +355,7 @@ void parseSeqToVCFOptions(int argc, char** argv) {
     case 'P': arg >> opt::pad; break;
     case 'G': arg >> opt::refgenome; break;
     case 'a': arg >> opt::analysis_id; break;
+    case 'm': arg >> opt::max_coverage; break;
     case 'n': 
       tmp = bamOptParse(opt::short_bams, arg, sample_number++, "n"); break;
     case 't':  

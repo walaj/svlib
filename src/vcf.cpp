@@ -186,7 +186,7 @@ bool VCFEntry::operator<(const VCFEntry &v) const {
   return be->gr < vbe->gr;    
 }
 
-// create a VCFFile from a snowman breakpoints file
+// create a VCFFile from a breakpoints file
 VCFFile::VCFFile(std::string file, std::string id, const SeqLib::BamHeader& h, const VCFHeader& vheader, bool nopass) {
 
   analysis_id = id;
@@ -272,7 +272,7 @@ VCFFile::VCFFile(std::string file, std::string id, const SeqLib::BamHeader& h, c
   //sv_header.addInfoField("TDISC","1","Integer","Number of discordant read pairs from the tumor BAM");
   //sv_header.addInfoField("NDISC","1","Integer","Number of discordant read pairs from the normal BAM");
   sv_header.addInfoField("MATEID","1","String","ID of mate breakends");
-  //sv_header.addInfoField("SOMATIC","0","Flag","Variant is somatic");
+  sv_header.addInfoField("SOMATIC","0","Flag","Variant is somatic");
   sv_header.addInfoField("SUBN","1","Integer","Number of secondary alignments associated with this contig fragment");
   //sv_header.addInfoField("TCOV","1","Integer","Max tumor coverage at break");
   //sv_header.addInfoField("NCOV","1","Integer","Max normal coverage at break");
@@ -281,13 +281,13 @@ VCFFile::VCFFile(std::string file, std::string id, const SeqLib::BamHeader& h, c
 
   sv_header.addInfoField("NUMPARTS","1","Integer","If detected with assembly, number of parts the contig maps to. Otherwise 0");
   sv_header.addInfoField("EVDNC","1","String","Provides type of evidence for read. ASSMB is assembly only, ASDIS is assembly+discordant. DSCRD is discordant only.");
-  sv_header.addInfoField("SCTG","1","String","Identifier for the contig assembled by SnowmanSV to make the SV call");
+  sv_header.addInfoField("SCTG","1","String","Identifier for the long sequence");
   sv_header.addInfoField("INSERTION","1","String","Sequence insertion at the breakpoint.");
   sv_header.addInfoField("SPAN","1","Integer","Distance between the breakpoints. -1 for interchromosomal");
   sv_header.addInfoField("DISC_MAPQ","1","Integer","Mean mapping quality of discordant reads mapped here");
 
   // add the indel header fields
-  indel_header.addInfoField("SCTG","1","String","Identifier for the contig assembled by SnowmanSV to make the indel call");
+  indel_header.addInfoField("SCTG","1","String","Identifier for the long sequence");
   indel_header.addInfoField("MAPQ","1","Integer","Mapping quality (BWA-MEM) of the assembled contig");
   indel_header.addInfoField("SPAN","1","Integer","Size of the indel");
 
@@ -315,7 +315,7 @@ VCFFile::VCFFile(std::string file, std::string id, const SeqLib::BamHeader& h, c
 
   indel_header.addInfoField("REPSEQ","1","String","Repeat sequence near the event");
   indel_header.addInfoField("GRAYLIST","0","Flag","Indel is low quality and cross a difficult region of genome");
-  //indel_header.addInfoField("SOMATIC","0","Flag","Variant is somatic");
+  indel_header.addInfoField("SOMATIC","0","Flag","Variant is somatic");
   indel_header.addInfoField("PON","1","Integer","Number of normal samples that have this indel present");
   indel_header.addInfoField("NM","1","Integer","Number of mismatches of this alignment fragment to reference");
   indel_header.addInfoField("READNAMES",".","String","IDs of ALT reads");
@@ -493,48 +493,34 @@ bool VCFEntry::operator==(const VCFEntry &v) const {
 // write out somatic and germline INDEL vcfs
 void VCFFile::writeIndels(string basename, bool zip, bool onefile) const {
 
-  std::string gname = basename + "germline.indel.vcf.gz";
-  std::string sname = basename + "somatic.indel.vcf.gz";
-  std::string gname_nz = basename + "germline.indel.vcf";
-  std::string sname_nz = basename + "somatic.indel.vcf";
+  std::string gname = basename + ".indel.vcf.gz";
+  std::string gname_nz = basename + ".indel.vcf";
 
   if (onefile) {
     gname_nz = basename + "indel.vcf";
     gname    = basename + "indel.vcf.gz";
   }
     
-  ofstream out_g, out_s;
+  ofstream out_g;
 
   BGZF* g_bg = NULL;
-  BGZF* s_bg = NULL;
-
+  
   if (zip) {
     g_bg = bgzf_open(gname.c_str(), "w");
-    if (!onefile) s_bg = bgzf_open(sname.c_str(), "w");
     std::stringstream indel_h;
     indel_h << indel_header << endl;
-    if (!bgzf_write(g_bg, indel_h.str().c_str(), indel_h.str().length())) {
+    if (!bgzf_write(g_bg, indel_h.str().c_str(), indel_h.str().length())) 
       cerr << "Could not write bzipped vcf" << endl;
-    }
-    if (!onefile)
-      if (!bgzf_write(s_bg, indel_h.str().c_str(), indel_h.str().length())) {
-	cerr << "Could not write bzipped vcf" << endl;
-    }
   } else {
     out_g.open(gname_nz.c_str());
-    if (!onefile)
-      out_s.open(sname_nz.c_str());
     out_g << indel_header << endl;
-    if (!onefile)
-      out_s << indel_header << endl;
   }
 
   VCFEntryVec tmpvec;
 
   // put the indels into a sorted vector
-  for (auto& i : indels) {
+  for (auto& i : indels) 
     tmpvec.push_back(i.second->e1);
-  }
 
   // sort the temp entry vec
   sort(tmpvec.begin(), tmpvec.end());  
@@ -544,38 +530,22 @@ void VCFFile::writeIndels(string basename, bool zip, bool onefile) const {
 
     if (!i.bp->pass && !include_nonpass)
       continue;
-
-    std::stringstream ss;
-    if (!onefile && i.bp->somatic_score >= SOMATIC_LOD) {
-      if (zip) 
-	__write_to_zip_vcf(i, s_bg);
-      else 
-	out_s << i << endl;
-      
-    } else {
-      if (zip) 
-	__write_to_zip_vcf(i, g_bg);
-      else
-	out_g << i << endl;
-    }
     
+    if (zip) 
+      __write_to_zip_vcf(i, g_bg);
+    else
+      out_g << i << endl;
   }
 
   if (zip) {
     bgzf_close(g_bg);
-    if (!onefile)
-      bgzf_close(s_bg);
   } else {
     out_g.close();
-    if (!onefile)
-      out_s.close();
   }
   
   if (zip) {
     // tabix it
     tabixVcf(gname);
-    if (!onefile)
-      tabixVcf(sname);
   }
   
 }
@@ -584,43 +554,28 @@ void VCFFile::writeIndels(string basename, bool zip, bool onefile) const {
 void VCFFile::writeSVs(std::string basename, bool zip, bool onefile) const {
 
   std::string gname, sname, gname_nz, sname_nz; 
-  gname = basename + "germline.sv.vcf.gz";
-  sname = basename + "somatic.sv.vcf.gz";
-  gname_nz = basename + "germline.sv.vcf";
-  sname_nz = basename + "somatic.sv.vcf";
+  gname = basename + ".sv.vcf.gz";
+  gname_nz = basename + "..sv.vcf";
 
   if (onefile) {
     gname    = basename + "sv.vcf.gz";
     gname_nz = basename + "sv.vcf";
-
   }
 
-  ofstream out_g, out_s;
+  ofstream out_g;
 
-  BGZF* s_bg = NULL;
   BGZF* g_bg = NULL;
 
   if (zip) {
     g_bg = bgzf_open(gname.c_str(), "w");
-    if (!onefile)
-      s_bg = bgzf_open(sname.c_str(), "w");
     std::stringstream sv_h;
     sv_h << sv_header << endl;
     if (!bgzf_write(g_bg, sv_h.str().c_str(), sv_h.str().length())) {
       cerr << "Could not write bzipped vcf" << endl;
     }
-    if (!onefile)
-      if (!bgzf_write(s_bg, sv_h.str().c_str(), sv_h.str().length())) {
-	cerr << "Could not write bzipped vcf" << endl;
-      }
   } else {
     out_g.open(gname_nz.c_str());
-    if (!onefile)
-      out_s.open(sname_nz.c_str());
-
     out_g << sv_header << endl;
-    if (!onefile)
-      out_s << sv_header << endl;
   }
     
   VCFEntryVec tmpvec;
@@ -658,39 +613,22 @@ void VCFFile::writeSVs(std::string basename, bool zip, bool onefile) const {
     if (!i.bp->pass && !include_nonpass)
       continue;
     
-    // somatic
-    if (!onefile &&  i.bp->somatic_score >= SOMATIC_LOD) { 
-      if (zip) 
-	__write_to_zip_vcf(i, s_bg);
-      else
-	out_s << i << endl;
-      // germline
-    } else {
-      if (zip)
-	__write_to_zip_vcf(i, g_bg);
-      else 
-	out_g << i << endl;
-    }
-
+    if (zip)
+      __write_to_zip_vcf(i, g_bg);
+    else 
+      out_g << i << endl;
+    
   }
   
   if (zip) {
     bgzf_close(g_bg);
-    if (!onefile)
-      bgzf_close(s_bg);
   } else {
-    out_s.close();
-    if (!onefile)
-      out_g.close();
+    out_g.close();
   }
 
   // tabix it
-  if (zip) {
-    if (!onefile)
-      tabixVcf(sname); 
+  if (zip) 
     tabixVcf(gname);
-  }
-
 }
 
 
@@ -805,8 +743,8 @@ std::unordered_map<std::string, std::string> VCFEntry::fillInfoFields() const {
   else
     info_fields["MAPQ"] = std::to_string(bp->b2.mapq);
 
-  //if (bp->somatic_score >= SOMATIC_LOD)
-  //  info_fields["SOMATIC"] = "";
+  if (bp->somatic_score >= SOMATIC_LOD)
+    info_fields["SOMATIC"] = "";
   
   // put all the info fields for SVs
   if (bp->num_align != 1) {

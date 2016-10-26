@@ -37,7 +37,7 @@ public:
   BreakRegion(const std::string c, const std::string p) : 
     SeqLib::GenomicRegion("1", p, p, SeqLib::BamHeader()), chr_name(c) {}
 
-  std::string chr_name;
+  std::string info, geno, chr_name;
 };
 
 void runVCFToBEDPE(int argc, char** argv) {
@@ -82,10 +82,24 @@ void runVCFToBEDPE(int argc, char** argv) {
 	++count;
       }
 
+      // concatenate the genotypes
+      std::stringstream ss;
+      for (const auto& g : geno)
+	ss << g << "\t" << std::endl;
+      
       // make the break region
       BreakRegion br(chr, pos);
       br.chr_name = chr;
+      br.info = info;
+      br.geno = ss.str();
       
+      br.strand = '*';
+      // find the strandedness
+      if (alt.find("]") == 0 || alt.find("[") == 0)
+	br.strand = '-'; // convention is faces breakpoint
+      else
+	br.strand = '+';
+
       // get the id
       std::string token_id = id.substr(0, id.find(":"));
       
@@ -113,9 +127,12 @@ void runVCFToBEDPE(int argc, char** argv) {
     if (*br2 < *br1)
       std::swap(*br1, *br2);
     
-    // write it out
+    // write it out to stdout as BEDPE
     std::cout << br1->chr_name << "\t" << br1->pos1 << "\t" << br1->pos1 << "\t" 
-	      << br2->chr_name << "\t" << br2->pos1 << "\t" << br2->pos1 << std::endl;
+	      << br2->chr_name << "\t" << br2->pos1 << "\t" << br2->pos1 << "\t" 
+	      << b.first << "\t" << 0 << "\t"  // name and score
+	      << br1->strand << "\t" << br2->strand << "\t" 
+	      << br1->info << "\t" << br1->geno << std::endl;
   }
    
 
