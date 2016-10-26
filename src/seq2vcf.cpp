@@ -20,9 +20,11 @@
 // representation of covearge of INFORMATIVE reads (eg ones that could be split)
 #define INFORMATIVE_COVERAGE_BUFFER 4
 
+static pthread_mutex_t lock;
+
 namespace opt {
   static bool no_unfiltered = false;
-  static int max_coverage = 200;
+  static int max_coverage = 100;
   static std::string refgenome;
   static std::string bam;
   static std::string analysis_id = "s2v";
@@ -73,6 +75,12 @@ void runSeqToVCF(int argc, char** argv) {
 
   parseSeqToVCFOptions(argc, argv);
 
+  // open the mutex
+  if (pthread_mutex_init(&lock, NULL) != 0) {
+    std::cerr << "\n mutex init failed\n";
+    exit(EXIT_FAILURE);
+  }
+
   // open the input
   SeqLib::BamReader reader;
   if (!reader.Open(opt::bam)) {
@@ -82,6 +90,13 @@ void runSeqToVCF(int argc, char** argv) {
 
   hdr = reader.Header();
 
+  // open the bps
+  ogzstream bps_file, aln_file;
+  std::string bps_name = opt::analysis_id + ".bps.txt.gz";
+  std::string aln_name = opt::analysis_id + ".alignments.txt.gz";
+  bps_file.open(bps_name.c_str(), std::ios::out);
+  aln_file.open(aln_name.c_str(), std::ios::out);
+
   // Create the queue and consumer (worker) threads
   WorkQueue<LongReaderWorkItem*>  queue; // queue of work items to be processed by threads
   std::vector<ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>*> threadqueue;
@@ -90,6 +105,8 @@ void runSeqToVCF(int argc, char** argv) {
   // establish and start the threads
   for (int i = 0; i < opt::cores; i++) {
     LongReaderThreadItem * ti =  new LongReaderThreadItem(i, opt::short_bams); // create the thread-specific data
+    ti->bps_file = &bps_file;
+    ti->aln_file = &aln_file;
     if (!ti->LoadReference(opt::refgenome)) {
       std::cerr << "ERROR could not load reference genome " << opt::refgenome << std::endl;
       exit(EXIT_FAILURE);
@@ -146,17 +163,16 @@ void runSeqToVCF(int argc, char** argv) {
     }
 
   }
-  
-  // open the bps
-  ogzstream bps_file;
-  std::string bps_name = opt::analysis_id + ".bps.txt.gz";
-  bps_file.open(bps_name.c_str(), std::ios::out);
+    
 
   // wait for the threads to finish
   for (int i = 0; i < opt::cores; ++i)  {
     threadqueue[i]->join();
-    bps_file << threadqueue[i]->GetThreadData()->bps.str();
   }
+
+  // close the text files
+  aln_file.close();
+  bps_file.close();
 
   // put args into string for VCF later
   for (int i = 0; i < argc; ++i)
@@ -284,15 +300,20 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
   for (auto& i : allbreaks)
     thread_item->bps << i.toFileString(no_reads) << std::endl;
 
+  //write the alignments to file
+  thread_item->aln << *ac << std::endl;
+
   // clear coverage data
   for (auto& c : covs)
     delete c.second;
 
   // print info
   ++thread_item->num_processed;
-  if (thread_item->num_processed % 1000 == 0)
+  if (thread_item->num_processed % 1000 == 0) {
     std::cerr << "...processed " << SeqLib::AddCommas(thread_item->num_processed) << " seqs on thread " 
 	      << thread_item->thread_id << std::endl;
+    thread_item->WriteFiles(&lock);
+  }
   
   return true;
 }

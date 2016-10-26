@@ -1,6 +1,7 @@
 #ifndef SVLIB_SEQ2VCF_H__
 #define SVLIB_SEQ2VCF_H__
 
+#include "gzstream.h"
 #include <ctime>
 #include "SeqLib/BamRecord.h"
 #include "SeqLib/BamReader.h"
@@ -31,7 +32,7 @@ struct ContigElement {
 struct LongReaderThreadItem {
 
 LongReaderThreadItem(size_t i, const std::map<std::string, std::string>& map) : thread_id(i) {
-  // open the basm
+  // open the short read readers
   for (const auto& b : map) {
     readers[b.first] = SeqLib::BamReader();
     if (!readers[b.first].Open(b.second)) {
@@ -42,13 +43,25 @@ LongReaderThreadItem(size_t i, const std::map<std::string, std::string>& map) : 
     
 }
 
+  /** Load a reference genome for getting ref bases */
   bool LoadReference(const std::string& r) {
     return (ref.LoadIndex(r));
   }
 
-  size_t thread_id = 0;
+  /** Write the files store in this thread and clear to save mem */
+  void WriteFiles(pthread_mutex_t* lock) {
+    pthread_mutex_lock(lock);
+    (*bps_file) << bps.str();
+    bps.str(std::string());
+    (*aln_file) << aln.str();
+    aln.str(std::string());
+    pthread_mutex_unlock(lock);
+  }
+
+  size_t thread_id = 0; // unique id for this thread
   
-  std::stringstream bps;
+  std::stringstream bps; // stream to store BPS output
+  std::stringstream aln; // stream to store ALN output
   
   size_t num_processed = 0; // count number processed 
 
@@ -56,6 +69,9 @@ LongReaderThreadItem(size_t i, const std::map<std::string, std::string>& map) : 
   std::map<std::string, SeqLib::BamReader> readers; 
 
   SeqLib::RefGenome ref; // pointer to index reference genome
+
+  ogzstream * bps_file; // pointer to a file to dump the bps info
+  ogzstream * aln_file; // pointer to a file to dump the aln info
 
 };
 
