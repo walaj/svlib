@@ -8,15 +8,17 @@
 #include "seq2vcf.h"
 #include "simulate.h"
 #include "realigntest.h"
+#include "vcf2bedpe.h"
 
 static const char *USAGE_MESSAGE =
 "Program: svlib \n"
 "Contact: Jeremiah Wala [ jwala@broadinstitute.org ]\n"
-"Usage: snowman <command> [options]\n\n"
+"Usage: svlib <command> [options]\n\n"
 "Commands:\n"
 "           seqtovcf          Convert an aligned long sequence BAM/SAM/CRAM to a VCF\n"
 "           sim               Simulate indels and rearrangements on a genome\n"
-"           realigntest       Simulate rearrangements and contigs and test realignment performance\n"
+"           realigntest       Simulate rearrangements contigs and test realignment performance\n"
+"           vcftobedpe        Convert a BND or DEL/DUP/TRA/INV formatted SV VCF file to BEDPE format\n"
 "\nReport bugs to jwala@broadinstitute.org \n\n";
 
 int main(int argc, char** argv) {
@@ -31,6 +33,8 @@ int main(int argc, char** argv) {
       return 0;
     } else if (command == "seqtovcf") {
       runSeqToVCF(argc -1, argv + 1);
+    } else if (command == "vcftobedpe") {
+      runVCFToBEDPE(argc -1, argv + 1);
     } else if (command == "sim") {
       runSimulation(argc - 1, argv + 1);
     } else if (command == "realigntest") {

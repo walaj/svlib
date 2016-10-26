@@ -46,8 +46,9 @@ CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_svlib_OBJECTS = svlib-svlib.$(OBJEXT) svlib-gzstream.$(OBJEXT) \
-	svlib-alignReadsToContigs.$(OBJEXT) svlib-vcf.$(OBJEXT) \
-	svlib-seq2vcf.$(OBJEXT) svlib-AlignmentFragment.$(OBJEXT) \
+	svlib-vcf2bedpe.$(OBJEXT) svlib-alignReadsToContigs.$(OBJEXT) \
+	svlib-vcf.$(OBJEXT) svlib-seq2vcf.$(OBJEXT) \
+	svlib-AlignmentFragment.$(OBJEXT) \
 	svlib-AlignedContig.$(OBJEXT) svlib-BreakPoint.$(OBJEXT) \
 	svlib-DiscordantCluster.$(OBJEXT) svlib-STCoverage.$(OBJEXT) \
 	svlib-simulate.$(OBJEXT) svlib-PowerLawSim.$(OBJEXT) \
@@ -173,7 +174,7 @@ svlib_LDADD = \
 	$(top_builddir)/SeqLib/fermi-lite/libfml.a \
 	$(top_builddir)/SeqLib/htslib/libhts.a 
 
-svlib_SOURCES = svlib.cpp gzstream.C alignReadsToContigs.cpp vcf.cpp seq2vcf.cpp AlignmentFragment.cpp AlignedContig.cpp BreakPoint.cpp \
+svlib_SOURCES = svlib.cpp gzstream.C vcf2bedpe.cpp alignReadsToContigs.cpp vcf.cpp seq2vcf.cpp AlignmentFragment.cpp AlignedContig.cpp BreakPoint.cpp \
 	DiscordantCluster.cpp STCoverage.cpp simulate.cpp PowerLawSim.cpp SeqFrag.cpp realigntest.cpp
 
 all: all-am
@@ -271,6 +272,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-simulate.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-svlib.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-vcf.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-vcf2bedpe.Po@am__quote@
 
 .C.o:
 @am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -313,6 +315,20 @@ svlib-gzstream.obj: gzstream.C
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='gzstream.C' object='svlib-gzstream.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-gzstream.obj `if test -f 'gzstream.C'; then $(CYGPATH_W) 'gzstream.C'; else $(CYGPATH_W) '$(srcdir)/gzstream.C'; fi`
+
+svlib-vcf2bedpe.o: vcf2bedpe.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-vcf2bedpe.o -MD -MP -MF $(DEPDIR)/svlib-vcf2bedpe.Tpo -c -o svlib-vcf2bedpe.o `test -f 'vcf2bedpe.cpp' || echo '$(srcdir)/'`vcf2bedpe.cpp
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-vcf2bedpe.Tpo $(DEPDIR)/svlib-vcf2bedpe.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='vcf2bedpe.cpp' object='svlib-vcf2bedpe.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-vcf2bedpe.o `test -f 'vcf2bedpe.cpp' || echo '$(srcdir)/'`vcf2bedpe.cpp
+
+svlib-vcf2bedpe.obj: vcf2bedpe.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-vcf2bedpe.obj -MD -MP -MF $(DEPDIR)/svlib-vcf2bedpe.Tpo -c -o svlib-vcf2bedpe.obj `if test -f 'vcf2bedpe.cpp'; then $(CYGPATH_W) 'vcf2bedpe.cpp'; else $(CYGPATH_W) '$(srcdir)/vcf2bedpe.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-vcf2bedpe.Tpo $(DEPDIR)/svlib-vcf2bedpe.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='vcf2bedpe.cpp' object='svlib-vcf2bedpe.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-vcf2bedpe.obj `if test -f 'vcf2bedpe.cpp'; then $(CYGPATH_W) 'vcf2bedpe.cpp'; else $(CYGPATH_W) '$(srcdir)/vcf2bedpe.cpp'; fi`
 
 svlib-alignReadsToContigs.o: alignReadsToContigs.cpp
 @am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-alignReadsToContigs.o -MD -MP -MF $(DEPDIR)/svlib-alignReadsToContigs.Tpo -c -o svlib-alignReadsToContigs.o `test -f 'alignReadsToContigs.cpp' || echo '$(srcdir)/'`alignReadsToContigs.cpp

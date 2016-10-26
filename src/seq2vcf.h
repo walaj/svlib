@@ -53,8 +53,8 @@ LongReaderThreadItem(size_t i, const std::map<std::string, std::string>& map) : 
     pthread_mutex_lock(lock);
     (*bps_file) << bps.str();
     bps.str(std::string());
-    (*aln_file) << aln.str();
-    aln.str(std::string());
+    //(*aln_file) << aln.str();
+    //aln.str(std::string());
     pthread_mutex_unlock(lock);
   }
 

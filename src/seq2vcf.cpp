@@ -95,7 +95,7 @@ void runSeqToVCF(int argc, char** argv) {
   std::string bps_name = opt::analysis_id + ".bps.txt.gz";
   std::string aln_name = opt::analysis_id + ".alignments.txt.gz";
   bps_file.open(bps_name.c_str(), std::ios::out);
-  aln_file.open(aln_name.c_str(), std::ios::out);
+  //aln_file.open(aln_name.c_str(), std::ios::out);
 
   // Create the queue and consumer (worker) threads
   WorkQueue<LongReaderWorkItem*>  queue; // queue of work items to be processed by threads
@@ -106,7 +106,7 @@ void runSeqToVCF(int argc, char** argv) {
   for (int i = 0; i < opt::cores; i++) {
     LongReaderThreadItem * ti =  new LongReaderThreadItem(i, opt::short_bams); // create the thread-specific data
     ti->bps_file = &bps_file;
-    ti->aln_file = &aln_file;
+    //ti->aln_file = &aln_file;
     if (!ti->LoadReference(opt::refgenome)) {
       std::cerr << "ERROR could not load reference genome " << opt::refgenome << std::endl;
       exit(EXIT_FAILURE);
@@ -151,9 +151,15 @@ void runSeqToVCF(int argc, char** argv) {
       curr_name = r.Qname();
       assert(brv.size());
       // only add if multi-part alignment or has gapped alignment
+      int max_mapq = 0;
+      for (const auto& a : brv)
+	max_mapq = a.MapQuality() > max_mapq ? a.MapQuality() : max_mapq;
+	
       if (brv.size() > 1 || brv[0].MaxDeletionBases() || brv[0].MaxInsertionBases()) { 
-	LongReaderWorkItem * item = new LongReaderWorkItem(ContigElement(brv, regions));
-	queue.add(item);
+	if (max_mapq >= 10 && brv[0].Length() > 500) {
+	  LongReaderWorkItem * item = new LongReaderWorkItem(ContigElement(brv, regions));
+	  queue.add(item);
+	}
       }
       brv.clear();
       regions = SeqLib::GRC(); // create a new one
@@ -164,6 +170,7 @@ void runSeqToVCF(int argc, char** argv) {
 
   }
     
+  std::cerr << "...processing " << SeqLib::AddCommas(queue.size()) << " contigs" << std::endl;
 
   // wait for the threads to finish
   for (int i = 0; i < opt::cores; ++i)  {
@@ -171,7 +178,7 @@ void runSeqToVCF(int argc, char** argv) {
   }
 
   // close the text files
-  aln_file.close();
+  //aln_file.close();
   bps_file.close();
 
   // put args into string for VCF later
@@ -301,7 +308,7 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
     thread_item->bps << i.toFileString(no_reads) << std::endl;
 
   //write the alignments to file
-  thread_item->aln << *ac << std::endl;
+  //thread_item->aln << *ac << std::endl;
 
   // clear coverage data
   for (auto& c : covs)
