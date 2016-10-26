@@ -45,12 +45,13 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_svlib_OBJECTS = svlib-svlib.$(OBJEXT) svlib-seq2vcf.$(OBJEXT) \
-	svlib-AlignmentFragment.$(OBJEXT) \
+am_svlib_OBJECTS = svlib-svlib.$(OBJEXT) svlib-gzstream.$(OBJEXT) \
+	svlib-alignReadsToContigs.$(OBJEXT) svlib-vcf.$(OBJEXT) \
+	svlib-seq2vcf.$(OBJEXT) svlib-AlignmentFragment.$(OBJEXT) \
 	svlib-AlignedContig.$(OBJEXT) svlib-BreakPoint.$(OBJEXT) \
 	svlib-DiscordantCluster.$(OBJEXT) svlib-STCoverage.$(OBJEXT) \
 	svlib-simulate.$(OBJEXT) svlib-PowerLawSim.$(OBJEXT) \
-	svlib-SeqFrag.$(OBJEXT)
+	svlib-SeqFrag.$(OBJEXT) svlib-realigntest.$(OBJEXT)
 svlib_OBJECTS = $(am_svlib_OBJECTS)
 svlib_DEPENDENCIES = $(top_builddir)/SeqLib/src/libseqlib.a \
 	$(top_builddir)/SeqLib/bwa/libbwa.a \
@@ -172,13 +173,13 @@ svlib_LDADD = \
 	$(top_builddir)/SeqLib/fermi-lite/libfml.a \
 	$(top_builddir)/SeqLib/htslib/libhts.a 
 
-svlib_SOURCES = svlib.cpp seq2vcf.cpp AlignmentFragment.cpp AlignedContig.cpp BreakPoint.cpp \
-	DiscordantCluster.cpp STCoverage.cpp simulate.cpp PowerLawSim.cpp SeqFrag.cpp
+svlib_SOURCES = svlib.cpp gzstream.C alignReadsToContigs.cpp vcf.cpp seq2vcf.cpp AlignmentFragment.cpp AlignedContig.cpp BreakPoint.cpp \
+	DiscordantCluster.cpp STCoverage.cpp simulate.cpp PowerLawSim.cpp SeqFrag.cpp realigntest.cpp
 
 all: all-am
 
 .SUFFIXES:
-.SUFFIXES: .cpp .o .obj
+.SUFFIXES: .C .cpp .o .obj
 $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am  $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
@@ -263,18 +264,22 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-PowerLawSim.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-STCoverage.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-SeqFrag.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-alignReadsToContigs.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-gzstream.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-realigntest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-seq2vcf.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-simulate.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-svlib.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svlib-vcf.Po@am__quote@
 
-.cpp.o:
+.C.o:
 @am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
 @am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXXCOMPILE) -c -o $@ $<
 
-.cpp.obj:
+.C.obj:
 @am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `$(CYGPATH_W) '$<'`
 @am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
@@ -294,6 +299,48 @@ svlib-svlib.obj: svlib.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='svlib.cpp' object='svlib-svlib.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-svlib.obj `if test -f 'svlib.cpp'; then $(CYGPATH_W) 'svlib.cpp'; else $(CYGPATH_W) '$(srcdir)/svlib.cpp'; fi`
+
+svlib-gzstream.o: gzstream.C
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-gzstream.o -MD -MP -MF $(DEPDIR)/svlib-gzstream.Tpo -c -o svlib-gzstream.o `test -f 'gzstream.C' || echo '$(srcdir)/'`gzstream.C
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-gzstream.Tpo $(DEPDIR)/svlib-gzstream.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='gzstream.C' object='svlib-gzstream.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-gzstream.o `test -f 'gzstream.C' || echo '$(srcdir)/'`gzstream.C
+
+svlib-gzstream.obj: gzstream.C
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-gzstream.obj -MD -MP -MF $(DEPDIR)/svlib-gzstream.Tpo -c -o svlib-gzstream.obj `if test -f 'gzstream.C'; then $(CYGPATH_W) 'gzstream.C'; else $(CYGPATH_W) '$(srcdir)/gzstream.C'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-gzstream.Tpo $(DEPDIR)/svlib-gzstream.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='gzstream.C' object='svlib-gzstream.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-gzstream.obj `if test -f 'gzstream.C'; then $(CYGPATH_W) 'gzstream.C'; else $(CYGPATH_W) '$(srcdir)/gzstream.C'; fi`
+
+svlib-alignReadsToContigs.o: alignReadsToContigs.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-alignReadsToContigs.o -MD -MP -MF $(DEPDIR)/svlib-alignReadsToContigs.Tpo -c -o svlib-alignReadsToContigs.o `test -f 'alignReadsToContigs.cpp' || echo '$(srcdir)/'`alignReadsToContigs.cpp
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-alignReadsToContigs.Tpo $(DEPDIR)/svlib-alignReadsToContigs.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='alignReadsToContigs.cpp' object='svlib-alignReadsToContigs.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-alignReadsToContigs.o `test -f 'alignReadsToContigs.cpp' || echo '$(srcdir)/'`alignReadsToContigs.cpp
+
+svlib-alignReadsToContigs.obj: alignReadsToContigs.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-alignReadsToContigs.obj -MD -MP -MF $(DEPDIR)/svlib-alignReadsToContigs.Tpo -c -o svlib-alignReadsToContigs.obj `if test -f 'alignReadsToContigs.cpp'; then $(CYGPATH_W) 'alignReadsToContigs.cpp'; else $(CYGPATH_W) '$(srcdir)/alignReadsToContigs.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-alignReadsToContigs.Tpo $(DEPDIR)/svlib-alignReadsToContigs.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='alignReadsToContigs.cpp' object='svlib-alignReadsToContigs.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-alignReadsToContigs.obj `if test -f 'alignReadsToContigs.cpp'; then $(CYGPATH_W) 'alignReadsToContigs.cpp'; else $(CYGPATH_W) '$(srcdir)/alignReadsToContigs.cpp'; fi`
+
+svlib-vcf.o: vcf.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-vcf.o -MD -MP -MF $(DEPDIR)/svlib-vcf.Tpo -c -o svlib-vcf.o `test -f 'vcf.cpp' || echo '$(srcdir)/'`vcf.cpp
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-vcf.Tpo $(DEPDIR)/svlib-vcf.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='vcf.cpp' object='svlib-vcf.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-vcf.o `test -f 'vcf.cpp' || echo '$(srcdir)/'`vcf.cpp
+
+svlib-vcf.obj: vcf.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-vcf.obj -MD -MP -MF $(DEPDIR)/svlib-vcf.Tpo -c -o svlib-vcf.obj `if test -f 'vcf.cpp'; then $(CYGPATH_W) 'vcf.cpp'; else $(CYGPATH_W) '$(srcdir)/vcf.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-vcf.Tpo $(DEPDIR)/svlib-vcf.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='vcf.cpp' object='svlib-vcf.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-vcf.obj `if test -f 'vcf.cpp'; then $(CYGPATH_W) 'vcf.cpp'; else $(CYGPATH_W) '$(srcdir)/vcf.cpp'; fi`
 
 svlib-seq2vcf.o: seq2vcf.cpp
 @am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-seq2vcf.o -MD -MP -MF $(DEPDIR)/svlib-seq2vcf.Tpo -c -o svlib-seq2vcf.o `test -f 'seq2vcf.cpp' || echo '$(srcdir)/'`seq2vcf.cpp
@@ -420,6 +467,34 @@ svlib-SeqFrag.obj: SeqFrag.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='SeqFrag.cpp' object='svlib-SeqFrag.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-SeqFrag.obj `if test -f 'SeqFrag.cpp'; then $(CYGPATH_W) 'SeqFrag.cpp'; else $(CYGPATH_W) '$(srcdir)/SeqFrag.cpp'; fi`
+
+svlib-realigntest.o: realigntest.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-realigntest.o -MD -MP -MF $(DEPDIR)/svlib-realigntest.Tpo -c -o svlib-realigntest.o `test -f 'realigntest.cpp' || echo '$(srcdir)/'`realigntest.cpp
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-realigntest.Tpo $(DEPDIR)/svlib-realigntest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='realigntest.cpp' object='svlib-realigntest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-realigntest.o `test -f 'realigntest.cpp' || echo '$(srcdir)/'`realigntest.cpp
+
+svlib-realigntest.obj: realigntest.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT svlib-realigntest.obj -MD -MP -MF $(DEPDIR)/svlib-realigntest.Tpo -c -o svlib-realigntest.obj `if test -f 'realigntest.cpp'; then $(CYGPATH_W) 'realigntest.cpp'; else $(CYGPATH_W) '$(srcdir)/realigntest.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/svlib-realigntest.Tpo $(DEPDIR)/svlib-realigntest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='realigntest.cpp' object='svlib-realigntest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(svlib_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o svlib-realigntest.obj `if test -f 'realigntest.cpp'; then $(CYGPATH_W) 'realigntest.cpp'; else $(CYGPATH_W) '$(srcdir)/realigntest.cpp'; fi`
+
+.cpp.o:
+@am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXXCOMPILE) -c -o $@ $<
+
+.cpp.obj:
+@am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `$(CYGPATH_W) '$<'`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXXCOMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
 ID: $(HEADERS) $(SOURCES) $(LISP) $(TAGS_FILES)
 	list='$(SOURCES) $(HEADERS) $(LISP) $(TAGS_FILES)'; \

@@ -8,8 +8,12 @@
 #include <map>
 #include <iomanip>
 
+#include "vcf.h"
+#include "gzstream.h"
+
 #include "AlignedContig.h"
 #include "PlottedRead.h"
+#include "alignReadsToContigs.h"
 
 // trim this many bases from front and back of read when determining coverage
 // this should be synced with the split-read buffer in BreakPoint2 for more accurate 
@@ -17,21 +21,30 @@
 #define INFORMATIVE_COVERAGE_BUFFER 4
 
 namespace opt {
+  static bool no_unfiltered = false;
+  static int max_coverage = 200;
+  static std::string refgenome;
   static std::string bam;
+  static std::string analysis_id = "s2v";
   static std::map<std::string, std::string> short_bams;
   static int pad = 0;
   static int cores = 1;
 }
 
+static std::string args = "svlib ";
 static int sample_number = 0;
 
-static const char* shortopts = "hp:P:n:t:";
+static SeqLib::BamHeader hdr;
+
+static const char* shortopts = "hp:P:n:t:G:a:";
 static const struct option longopts[] = {
   { "help",                    no_argument, NULL, 'h' },
   { "case-bam",                required_argument, NULL, 't' },
   { "control-bam",             required_argument, NULL, 'n' },
   { "pad",                     required_argument, NULL, 'P' },
   { "cores",                   required_argument, NULL, 'p' },
+  { "reference-genome",        required_argument, NULL, 'G' },
+  { "analysis-id",             required_argument, NULL, 'a' },
   { NULL, 0, NULL, 0 }
 };
 
@@ -66,11 +79,27 @@ void runSeqToVCF(int argc, char** argv) {
     std::cerr << "could not open BAM: " << opt::bam << std::endl;
     exit(EXIT_FAILURE);
   }
-  SeqLib::BamHeader hdr = reader.Header();
+
+  hdr = reader.Header();
 
   // Create the queue and consumer (worker) threads
   WorkQueue<LongReaderWorkItem*>  queue; // queue of work items to be processed by threads
   std::vector<ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>*> threadqueue;
+
+  std::cerr << "...starting sv parsing threads" << std::endl;
+  // establish and start the threads
+  for (int i = 0; i < opt::cores; i++) {
+    LongReaderThreadItem * ti =  new LongReaderThreadItem(i, opt::short_bams); // create the thread-specific data
+    if (!ti->LoadReference(opt::refgenome)) {
+      std::cerr << "ERROR could not load reference genome " << opt::refgenome << std::endl;
+      exit(EXIT_FAILURE);
+    }
+      
+    ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>* threadr = // establish new thread to draw from queue
+      new ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>(queue, ti);
+    threadr->start(); 
+    threadqueue.push_back(threadr); // add thread to the threadqueue
+  }
 
   // loop through and add jobs to the queue
   size_t count = 0;
@@ -79,6 +108,7 @@ void runSeqToVCF(int argc, char** argv) {
   SeqLib::BamRecordVector brv;
   SeqLib::GRC regions;
   SeqLib::BamRecord r;
+
   while(reader.GetNextRecord(r)) {
     
     if (++count % 200000 == 0) 
@@ -103,31 +133,73 @@ void runSeqToVCF(int argc, char** argv) {
     else {
       curr_name = r.Qname();
       assert(brv.size());
-      queue.add(new LongReaderWorkItem(ContigElement(brv, regions)));
+      // only add if multi-part alignment or has gapped alignment
+      if (brv.size() > 1 || brv[0].MaxDeletionBases() || brv[0].MaxInsertionBases()) { 
+	LongReaderWorkItem * item = new LongReaderWorkItem(ContigElement(brv, regions));
+	queue.add(item);
+      }
       brv.clear();
-      regions.clear();
+      regions = SeqLib::GRC(); // create a new one
 
       // start the next one
       add_contig(r, regions, brv, max_mapq, max_len);
     }
 
   }
-
-  std::cerr << "...starting sv parsing threads" << std::endl;
-  // establish and start the threads
-  for (int i = 0; i < opt::cores; i++) {
-    LongReaderThreadItem * ti =  new LongReaderThreadItem(i, opt::short_bams); // create the thread-specific data
-    ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>* threadr = // establish new thread to draw from queue
-      new ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>(queue, ti);
-    threadr->start(); 
-    threadqueue.push_back(threadr); // add thread to the threadqueue
-  }
   
+  // open the bps
+  ogzstream bps_file;
+  std::string bps_name = opt::analysis_id + ".bps.txt.gz";
+  bps_file.open(bps_name.c_str(), std::ios::out);
+
   // wait for the threads to finish
   for (int i = 0; i < opt::cores; ++i)  {
     threadqueue[i]->join();
-    std::cout << threadqueue[i]->GetThreadData()->bps.str() << std::endl;
+    bps_file << threadqueue[i]->GetThreadData()->bps.str();
   }
+
+  // put args into string for VCF later
+  for (int i = 0; i < argc; ++i)
+    args += std::string(argv[i]) + " ";
+
+  // make the vcf header
+  VCFHeader header;
+  header.filedate = fileDateString();
+  header.source = args;
+  header.reference = opt::refgenome;
+
+  if (!hdr.isEmpty())
+    for (int i = 0; i < hdr.NumSequences(); ++i)
+      header.addContigField(hdr.IDtoName(i),hdr.GetSequenceLength(i));
+
+  for (auto& b : opt::short_bams) {
+    std::string fname = b.second; //bpf.filename();
+    header.addSampleField(fname);
+    header.colnames += "\t" + fname; 
+  }
+
+  // primary VCFs
+  if (SeqLib::read_access_test(bps_name)) {
+    VCFFile vcf(bps_name, opt::analysis_id, hdr, header, !opt::no_unfiltered);
+    
+    if (!opt::no_unfiltered) {
+      std::string basename = opt::analysis_id + ".seqtovcf.unfiltered.";
+      vcf.include_nonpass = true;
+      std::cerr << "...writing unfiltered VCFs" << std::endl;
+      vcf.writeIndels(basename, false, opt::short_bams.size() == 1);
+      vcf.writeSVs(basename, false, opt::short_bams.size() == 1);
+    }
+
+    std::cerr << "...writing filtered VCFs" << std::endl;
+    std::string basename = opt::analysis_id + ".seqtovcf.";
+    vcf.include_nonpass = false;
+    vcf.writeIndels(basename, false, opt::short_bams.size() == 1);
+    vcf.writeSVs(basename, false, opt::short_bams.size() == 1);
+
+  } else {
+    std::cerr << "ERROR: Failed to make VCF. Could not file bps file " + bps_name << std::endl;
+  }
+
 }
 
 // process an individual contig
@@ -152,6 +224,8 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
 
   // make the index
   SeqLib::BWAWrapper bw;
+  bw.SetGapOpen(16); // default 6
+  bw.SetMismatchPenalty(9); // default 4
   bw.ConstructIndex(usv);
 
   // add the prefixes
@@ -160,9 +234,9 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
     prefixes.insert(b.first);
 
   // setup coverages
-  std::map<std::string, STCoverage> covs;
+  std::unordered_map<std::string, STCoverage*> covs;
   for (const auto& c : thread_item->readers)
-    covs.insert(std::pair<std::string, STCoverage>(c.first, STCoverage()));
+    covs.insert(std::pair<std::string, STCoverage*>(c.first, new STCoverage()));
 
   // grab the reads
   SeqLib::BamRecordVector reads;
@@ -171,7 +245,6 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
 	       covs[reader.first]);
   }
     
-
   // make the actual AligneContig
   this_alc.push_back(AlignedContig(m_contig.brv, prefixes));
   assert(this_alc.size() == 1);
@@ -179,23 +252,48 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
   //for (auto& kk : ac->m_frag_v) // set max indel for all of the frags
   //  kk.m_max_indel = 20;
 
+  // align reads to contigs
+  alignReadsToContigs(hdr, bw, usv, reads, *ac, &thread_item->ref);
+
+  // score read alignments
+  // Get contig coverage, discordant matching to contigs, etc
+  // repeat sequence filter
+  ac->assessRepeats();
+  
+  ac->splitCoverage();
+  // now that we have all the break support, check that the complex breaks are OK
+  ac->refilterComplex(); 
+  // add discordant reads support to each of the breakpoints
+  //ac->addDiscordantCluster(dmap);
+  // add in the cigar matches
+  //ac->checkAgainstCigarMatches(cigmap);
+
   // false says dont worry about "local"
   std::vector<BreakPoint> allbreaks = ac->getAllBreakPoints(false); 
   for (auto& i : allbreaks)
     i.repeatFilter();
-  //for (auto& i : allbreaks)
-  //  i.addCovs(covs, clip_covs);
+  for (auto& i : allbreaks)
+    i.addCovs(covs);
   for (auto& i : allbreaks)
     i.scoreBreakpoint(8, 2.5, 7, 3, 1, 100);
-  //for (auto& i : allbreaks)
-  //  i.setRefAlt(ref_genomeAW, ref_genome_viral_dummy);
-
+  for (auto& i : allbreaks)
+    i.setRefAlt(&thread_item->ref, NULL);
 
   // write the breakpoints to this thread
   bool no_reads = true;
   for (auto& i : allbreaks)
     thread_item->bps << i.toFileString(no_reads) << std::endl;
 
+  // clear coverage data
+  for (auto& c : covs)
+    delete c.second;
+
+  // print info
+  ++thread_item->num_processed;
+  if (thread_item->num_processed % 1000 == 0)
+    std::cerr << "...processed " << SeqLib::AddCommas(thread_item->num_processed) << " seqs on thread " 
+	      << thread_item->thread_id << std::endl;
+  
   return true;
 }
 
@@ -218,6 +316,8 @@ void parseSeqToVCFOptions(int argc, char** argv) {
     case 'h': help = true; break;
     case 'p': arg >> opt::cores; break;
     case 'P': arg >> opt::pad; break;
+    case 'G': arg >> opt::refgenome; break;
+    case 'a': arg >> opt::analysis_id; break;
     case 'n': 
       tmp = bamOptParse(opt::short_bams, arg, sample_number++, "n"); break;
     case 't':  
@@ -246,7 +346,7 @@ void add_contig(const SeqLib::BamRecord& r, SeqLib::GRC& regions, SeqLib::BamRec
 }
 
 void grab_reads(const std::string& prefix, SeqLib::BamReader& reader, const SeqLib::GRC& regions, SeqLib::BamRecordVector& brv,
-		STCoverage& cov) {
+		STCoverage* cov) {
 
   if (!reader.SetMultipleRegions(regions)) {
     std::cerr << "...failed to set regions " << std::endl;
@@ -263,7 +363,7 @@ void grab_reads(const std::string& prefix, SeqLib::BamReader& reader, const SeqL
     if (r.CountNBases())
       continue;
 
-    cov.addRead(r, INFORMATIVE_COVERAGE_BUFFER, false); 
+    cov->addRead(r, INFORMATIVE_COVERAGE_BUFFER, false); 
     
     std::string srn =  prefix + "_" + std::to_string(r.AlignmentFlag()) + "_" + r.Qname();
     assert(srn.length());
@@ -275,5 +375,52 @@ void grab_reads(const std::string& prefix, SeqLib::BamReader& reader, const SeqL
 
     brv.push_back(r);
   }
+
+  SeqLib::BamRecordVector new_reads;
+
+  const int m_seed = 6;
+
+  for (auto& r : brv) {
+      double this_cov1 = cov->getCoverageAtPosition(r.ChrID(), r.Position());
+      double this_cov2 = cov->getCoverageAtPosition(r.ChrID(), r.PositionEnd());
+      double this_cov = std::max(this_cov1, this_cov2);
+      double sample_rate = 1; // dummy, always set if max_coverage > 0
+      if (this_cov > 0) 
+	sample_rate = 1 - (this_cov - opt::max_coverage) / this_cov; // if cov->inf, sample_rate -> 0. if cov -> max_cov, sample_rate -> 1
+      
+      // this read should be randomly sampled, cov is too high
+      if (this_cov > opt::max_coverage) {
+#ifdef QNAME
+	  if (r.Qname() == QNAME && (r.AlignmentFlag() == QFLAG || QFLAG == -1)) {
+	    std::cerr << "subsampling because this_cov is " << this_cov << " and max cov is " << opt::max_coverage << " at position " << r.Position() << " and end position " << r.PositionEnd() << std::endl;
+	    std::cerr << " this cov 1 " << this_cov1 << " this_cov2 " << this_cov2 << std::endl;
+	  }
+#endif
+	  uint32_t k = __ac_Wang_hash(__ac_X31_hash_string(r.Qname().c_str()) ^ m_seed);
+	  if ((double)(k&0xffffff) / 0x1000000 <= sample_rate) // passed the random filter
+	    new_reads.push_back(r);
+      }
+      else // didn't have a coverage problems
+	{
+	  new_reads.push_back(r);
+	}
+      
+  }
   
+  brv = new_reads;
+  
+}
+
+std::string fileDateString() {
+  // set the time string
+  time_t t = time(0);   // get time now
+  struct tm * now = localtime( & t );
+  std::stringstream month;
+  std::stringstream mdate;
+  if ( (now->tm_mon+1) < 10)
+    month << "0" << now->tm_mon+1;
+  else 
+    month << now->tm_mon+1;
+  mdate << (now->tm_year + 1900) << month.str() <<  now->tm_mday;
+  return mdate.str();
 }

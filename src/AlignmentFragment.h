@@ -9,7 +9,7 @@
 #include <set>
 #include "BreakPoint.h"
 
-#define MAX_CONTIG_SIZE 5000000
+#define MAX_CONTIG_SIZE 2000000
 
 // forward declare
 class AlignedContig;

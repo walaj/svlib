@@ -7,6 +7,7 @@
 #include <iostream>
 #include "seq2vcf.h"
 #include "simulate.h"
+#include "realigntest.h"
 
 static const char *USAGE_MESSAGE =
 "Program: svlib \n"
@@ -15,6 +16,7 @@ static const char *USAGE_MESSAGE =
 "Commands:\n"
 "           seqtovcf          Convert an aligned long sequence BAM/SAM/CRAM to a VCF\n"
 "           sim               Simulate indels and rearrangements on a genome\n"
+"           realigntest       Simulate rearrangements and contigs and test realignment performance\n"
 "\nReport bugs to jwala@broadinstitute.org \n\n";
 
 int main(int argc, char** argv) {
@@ -31,6 +33,8 @@ int main(int argc, char** argv) {
       runSeqToVCF(argc -1, argv + 1);
     } else if (command == "sim") {
       runSimulation(argc - 1, argv + 1);
+    } else if (command == "realigntest") {
+      runRealignTest(argc - 1, argv + 1);
     }
     else {
       std::cerr << USAGE_MESSAGE;

@@ -8,7 +8,6 @@
  #include <cstdlib>
  #include <algorithm>
 
- #include "vcf.h"
  #include "SeqLib/GenomicRegion.h"
  #include "SeqLib/BamReader.h"
 
@@ -79,12 +78,10 @@ void fopen(const std::string& s, T& o) {
    parseSimulationOptions(argc, argv);
 
    // seed the RNG
-   if (opt::seed == 0)
-     opt::seed = (unsigned)time(NULL);
    srand(opt::seed);
-   std::cerr << "   Seed: " << opt::seed << std::endl;
-
-  findex = fai_load(opt::refgenome.c_str());  // load the reference
+   
+   // load the reference
+   findex = fai_load(opt::refgenome.c_str());  // load the reference
 
   // load the blacklist
   SeqLib::GRC blacklist;

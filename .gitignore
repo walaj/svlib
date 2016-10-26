@@ -35,3 +35,6 @@ config.status
 Makefile
 *.pico
 src/svlib
+config.h
+config.status
+bin

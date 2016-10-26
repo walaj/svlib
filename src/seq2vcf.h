@@ -1,8 +1,10 @@
 #ifndef SVLIB_SEQ2VCF_H__
 #define SVLIB_SEQ2VCF_H__
 
+#include <ctime>
 #include "SeqLib/BamRecord.h"
 #include "SeqLib/BamReader.h"
+#include "SeqLib/RefGenome.h"
 #include <map>
 #include "SeqLib/GenomicRegionCollection.h"
 #include "STCoverage.h"
@@ -13,7 +15,7 @@ void parseSeqToVCFOptions(int argc, char** argv);
 void add_contig(const SeqLib::BamRecord& r, SeqLib::GRC& regions, SeqLib::BamRecordVector& brv,
 		int& max_mapq, int& max_len);
 void grab_reads(const std::string& prefix, SeqLib::BamReader& reader, const SeqLib::GRC& regions, SeqLib::BamRecordVector& brv,
-		STCoverage& cov);
+		STCoverage * cov);
 
 // hold a single contig and all of its alignments
 struct ContigElement {
@@ -40,12 +42,20 @@ LongReaderThreadItem(size_t i, const std::map<std::string, std::string>& map) : 
     
 }
 
-  size_t thread_id = 0;
+  bool LoadReference(const std::string& r) {
+    return (ref.LoadIndex(r));
+  }
 
+  size_t thread_id = 0;
+  
   std::stringstream bps;
+  
+  size_t num_processed = 0; // count number processed 
 
   // each thread has unique reader
   std::map<std::string, SeqLib::BamReader> readers; 
+
+  SeqLib::RefGenome ref; // pointer to index reference genome
 
 };
 
@@ -61,12 +71,14 @@ class LongReaderWorkItem {
     return runLR(thread_data); // first element should always be thread data
   } 
   
- private:
+  // private:
   
   // data 
   ContigElement m_contig; // a set of aligned contigs with same qname
   
   bool runLR(LongReaderThreadItem* thread_item);
 };
+
+std::string fileDateString();
 
 #endif

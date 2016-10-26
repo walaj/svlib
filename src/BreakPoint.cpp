@@ -1183,7 +1183,7 @@ void BreakPoint::__format_bx_string() {
       } catch (const std::invalid_argument& ia) {}
       
       // try viral approach
-      if (ref.empty() && !viral->IsEmpty())
+      if (ref.empty() && viral && !viral->IsEmpty())
 	try {
 	  ref = viral->QueryRegion(b1.chr_name, b1.gr.pos1-1, b1.gr.pos1-1); 
 	} catch (const std::invalid_argument& ia) {
@@ -1196,7 +1196,7 @@ void BreakPoint::__format_bx_string() {
       } catch (const std::invalid_argument& ia) {}
 
       // try viral alt
-      if (alt.empty() && !viral->IsEmpty())
+      if (alt.empty() && viral && !viral->IsEmpty())
 	try {
 	  alt = viral->QueryRegion(b2.chr_name, b2.gr.pos1-1, b2.gr.pos1-1);
 	} catch (const std::invalid_argument& ia) {

@@ -10,6 +10,6 @@ svlib_LDADD = \
 	$(top_builddir)/SeqLib/fermi-lite/libfml.a \
 	$(top_builddir)/SeqLib/htslib/libhts.a 
 
-svlib_SOURCES = svlib.cpp seq2vcf.cpp AlignmentFragment.cpp AlignedContig.cpp BreakPoint.cpp \
-	DiscordantCluster.cpp STCoverage.cpp simulate.cpp PowerLawSim.cpp SeqFrag.cpp
+svlib_SOURCES = svlib.cpp gzstream.C alignReadsToContigs.cpp vcf.cpp seq2vcf.cpp AlignmentFragment.cpp AlignedContig.cpp BreakPoint.cpp \
+	DiscordantCluster.cpp STCoverage.cpp simulate.cpp PowerLawSim.cpp SeqFrag.cpp realigntest.cpp
 

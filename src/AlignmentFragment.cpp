@@ -3,13 +3,12 @@
 
 #define MIN_INDEL_MATCH_BRACKET 6
 #define MAX_INDELS 10000
-#define MAX_INDEL_PER_CONTIG 6 
+#define MAX_INDEL_PER_CONTIG 100
 
 // write the alignment record to a BAM file
 void AlignmentFragment::writeToBAM(SeqLib::BamWriter& bw) const { 
   bw.WriteRecord(m_align); 
 } 
-
 
 bool AlignmentFragment::checkLocal(const SeqLib::GenomicRegion& window) {
 
