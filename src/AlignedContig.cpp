@@ -20,8 +20,9 @@ AlignedContig::AlignedContig(const SeqLib::BamRecordVector& bav, const std::set<
     }
 
     // set the sequence. Convention is store as it came off assembler for first alignment
-    if (bav.begin()->ReverseFlag()) 
+    if (bav.begin()->ReverseFlag()) {
       SeqLib::rcomplement(m_seq);
+    }
 
     prefixes = pref;
 

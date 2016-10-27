@@ -19,14 +19,14 @@
 #define MIN_SOMATIC_RATIO 15
 
 // define repeats
-static std::vector<std::string> repr = {"AAAAAAAA", "TTTTTTTT", "CCCCCCCC", "GGGGGGGG",
-				 "TATATATATATATA", "ATATATATATATAT", 
-				 "GCGCGCGCGCGCGC", "CGCGCGCGCGCGCG", 
-				 "TGTGTGTGTGTGTG", "GTGTGTGTGTGTGT", 
-				 "TCTCTCTCTCTCTC", "CTCTCTCTCTCTCT", 
-				 "CACACACACACACA", "ACACACACACACAC", 
-				 "GAGAGAGAGAGAGA", "AGAGAGAGAGAGAG"};
-
+static std::vector<std::string> repr = {"AAAAAAAAAAAAAAAA", "TTTTTTTTTTTTTTTT", 
+					"CCCCCCCCCCCCCCCC", "GGGGGGGGGGGGGGGG",
+				        "TATATATATATATATA", "ATATATATATATATAT", 
+				        "GCGCGCGCGCGCGCGC", "CGCGCGCGCGCGCGCG", 
+				        "TGTGTGTGTGTGTGTG", "GTGTGTGTGTGTGTGT", 
+				        "TCTCTCTCTCTCTCTC", "CTCTCTCTCTCTCTCT", 
+				        "CACACACACACACACA", "ACACACACACACACAC", 
+				        "GAGAGAGAGAGAGAGA", "AGAGAGAGAGAGAGAG"};
 // define large repeats
 static std::vector<std::string> hirepr = {"AAAAAAAAAAAAAAA", "TTTTTTTTTTTTTTT", "CCCCCCCCCCCCCCCC", "GGGGGGGGGGGGGGG"};
 
@@ -339,8 +339,6 @@ BreakPoint::BreakPoint(const std::string &line, const SeqLib::BamHeader& h) {
       bool read_should_be_skipped = false;
       if (num_align == 1) {
 	std::vector<std::string> cigvec = j.GetSmartStringTag("SC"); // read against contig CIGAR
-	//if (cigvec.size() != cnvec.size())//debug
-	//  std::cerr << cigvec.size() << " _ " << cnvec.size() << std::endl;
 	assert(cigvec.size() == cnvec.size());
 	size_t kk = 0;
 	
@@ -353,9 +351,9 @@ BreakPoint::BreakPoint(const std::string &line, const SeqLib::BamHeader& h) {
 	    int pos = 0;
 	    
 	    // if this is a nasty repeat, don't trust non-perfect alignmentx on r2c alignment
-	    if ( (repeat_seq.length() > 6 || __check_homopolymer(j.Sequence())) && tcig.size() > 1) 
+	    if (__check_homopolymer(j.Sequence()) && tcig.size() > 1) 
 	      read_should_be_skipped = true;
-	    
+  
 	    // loop through r2c cigar and see positions
 	    for(auto& i : tcig) {
 
@@ -393,10 +391,15 @@ BreakPoint::BreakPoint(const std::string &line, const SeqLib::BamHeader& h) {
       bool tumor_read = sr.at(0) == 't';
       std::string sample_id = sr.substr(0,4);
 
-      int rightbreak1 = b1.cpos + (tumor_read ? T_SPLIT_BUFF : N_SPLIT_BUFF); // read must extend this far right of break1
-      int leftbreak1  = b1.cpos - (tumor_read ? T_SPLIT_BUFF : N_SPLIT_BUFF); // read must extend this far left of break1
-      int rightbreak2 = b2.cpos + (tumor_read ? T_SPLIT_BUFF : N_SPLIT_BUFF);
-      int leftbreak2  = b2.cpos - (tumor_read ? T_SPLIT_BUFF : N_SPLIT_BUFF);
+      // need read to cover past variant by some buffer. If there is a repeat,
+      // then this needs to be even longer to avoid ambiguity
+      int this_tbuff = T_SPLIT_BUFF + repeat_seq.length();
+      int this_nbuff = N_SPLIT_BUFF + repeat_seq.length();
+
+      int rightbreak1 = b1.cpos + (tumor_read ? this_tbuff : this_nbuff); // read must extend this far right of break1
+      int leftbreak1  = b1.cpos - (tumor_read ? this_tbuff : this_nbuff); // read must extend this far left of break1
+      int rightbreak2 = b2.cpos + (tumor_read ? this_tbuff : this_nbuff);
+      int leftbreak2  = b2.cpos - (tumor_read ? this_tbuff : this_nbuff);
 
       std::string contig_qname; // for sanity checking
       // get the alignment position on contig
@@ -440,17 +443,24 @@ BreakPoint::BreakPoint(const std::string &line, const SeqLib::BamHeader& h) {
       // insertions at junctions, where one can split at one and not the other because of the intervening sequence buffer
 
 
-      //debug
-      /*if (sr == "t000_163_H01PEALXX140819:2:2202:14804:18907")
+      /*if (j.Qname() == "H7AC3ADXX130905:1:2101:5221:49630")
 	std::cerr << " te " << te << " pos " << pos << " CIG " << j.GetZTag("SC") << " SL " << j.GetZTag("SL") << " SE " << j.GetZTag("SE") << 
 	  " leftbreak " << leftbreak1 << " rightbreak " << rightbreak1 << " leftbreak2 " << leftbreak2 << " rightbreak2 " << rightbreak2 << 
 	  " issplit1 " << issplit1 << " issplit2 " << issplit2 << " valid " << valid << std::endl;
       */
-
       // add the split reads for each end of the break
       // a read is split if it is spans both break ends for tumor, one break end for normal (to
       // be more sensitive to germline) and if it spans both ends for deletion (should be next to 
       // each other), or one end for insertions larger than 10, or this is a complex breakpoint
+
+      /*if (j.Qname() == "H7AJUADXX130905:2:2111:9176:54722")
+	std::cerr << " CHECKING on bp " << b2.gr << " SR " << sr << " VALID " 
+		  << valid << " issplit1 " << issplit1 << " issplit2 " 
+		  << issplit2 << " leftend " << leftend << " rightend " 
+		  << rightend << " leftbreak " << leftbreak1 
+		  << " rightbreak1 " << rightbreak1 
+		  << " leftbreak2 " << leftbreak2 << " rightbreak2 " << rightbreak2 << std::endl;
+      */
 
       if (valid) { 
 	
@@ -461,7 +471,6 @@ BreakPoint::BreakPoint(const std::string &line, const SeqLib::BamHeader& h) {
 	  // need to reject all reads of this qname
 	  // because we saw both first and second in pair hit same split
 	  reject_qnames.insert(qn);
-	  
 	} else {
 
 	  // if haven't seen this read, add here. If have, then dont because want to avoid re-setting first/second convention
@@ -518,8 +527,6 @@ BreakPoint::BreakPoint(const std::string &line, const SeqLib::BamHeader& h) {
 	split_reads.insert(sr);
 
 	// get read ID
-	//assert(sr.at(0) == 't' || sr.at(0) == 'n');
-	//bool tumor_read = sr.at(0) == 't';
 	std::string sample_id = sr.substr(0,4);
 
 	// keep track of qnames of split reads
@@ -724,14 +731,14 @@ BreakEnd::BreakEnd(const SeqLib::BamRecord& b) {
       confidence = "LOCALMATCH";
     else if ( num_split > 1 && ( (cov_span <= (readlen + 5 ) && cov_span > 0) || cov_span < 0) )
       confidence = "DUPREADS"; // the same sequences keep covering the split
-    else if (homology.length() >= 20 && (span > 1500 || span == -1) && std::max(b1.mapq, b2.mapq) < 60)
-      confidence = "NODISC";
+    //else if (homology.length() >= 20 && (span > 1500 || span == -1) && std::max(b1.mapq, b2.mapq) < 60)
+    //  confidence = "NODISC";
     else if ((int)seq.length() < readlen + 30)
       confidence = "TOOSHORT";
     else if (blacklist)
       confidence = "BLACKLIST";
-    else if (a.split < 7 && (span > 1500 || span == -1))  // large and inter chrom need 7+
-      confidence = "NODISC";
+    //else if (a.split < 7 && (span > 1500 || span == -1))  // large and inter chrom need 7+
+    ///  confidence = "NODISC";
     else if (std::max(b1.mapq, b2.mapq) <= 40 || std::min(b1.mapq, b2.mapq) <= 10) 
       confidence = "LOWMAPQ";
     else if ( std::min(b1.mapq, b2.mapq) <= 30 && a.split <= 8 ) 
@@ -1204,43 +1211,6 @@ void BreakPoint::__format_bx_string() {
 	  std::cerr << "Caught exception in BreakPoint:setRefAlt for SV Alt: " << ia.what() << std::endl;
 	}
 
-      /*char * ref1 = faidx_fetch_seq(main_findex, const_cast<char*>(b1.chr_name.c_str()), b1.gr.pos1-1, b1.gr.pos1-1, &len);
-      if (!ref1) {
-	if (viral_findex)
-	  ref1 = faidx_fetch_seq(viral_findex, const_cast<char*>(b1.chr_name.c_str()), b1.gr.pos1-1, b1.gr.pos1-1, &len);
-      }
-      if (!ref1) {
-	std::cerr << "couldn't find reference on BP1 for ref " << b1.chr_name << " in either viral or human" << std::endl;
-	}
-      
-      char * ref2 = faidx_fetch_seq(main_findex, const_cast<char*>(b2.chr_name.c_str()), b2.gr.pos1-1, b2.gr.pos1-1, &len);
-      if (!ref2) {
-	if (viral_findex)
-	  ref2 = faidx_fetch_seq(viral_findex, const_cast<char*>(b2.chr_name.c_str()), b2.gr.pos1-1, b2.gr.pos1-1, &len);
-      } 
-      if (!ref2) {
-	std::cerr << "couldn't find reference on BP2 for ref " << b2.chr_name << " in either viral or human" << std::endl;
-      }
-
-      // couldn't find something, so bail
-      if (!ref1 || !ref2)
-	return;
-
-      // by convention, set ref to 1 and alt to 2. Gets sorted in VCF creation
-      ref = std::string(ref1);
-      alt = std::string(ref2);
-
-      */
-      
-      //if (!ref.length())
-      //	ref = "N";
-      //if (!alt.length())
-      //	alt = "N";
-
-      //if (ref1)
-      //free(ref1);
-      //if (ref2)
-      //	free(ref2);
       
     } else {
 
@@ -1251,29 +1221,12 @@ void BreakPoint::__format_bx_string() {
 	} catch (const std::invalid_argument& ia) {
 	  ref = "N";
 	  std::cerr << "Caught exception in BreakPoint:setRefAlt for indel ref: " << ia.what() << std::endl;
-	  //std::cerr << "couldn't find reference sequence for ref " << b1.chr_name << " for indel, on human reference " << std::endl;
-	  //std::cerr << (*this) << std::endl;
-	  //exit(EXIT_FAILURE); //debug
-	  //return;
+
 	}
-	
-	// reference
-	//char * refi = faidx_fetch_seq(main_findex, const_cast<char*>(b1.chr_name.c_str()), b1.gr.pos1-1, b1.gr.pos1-1, &len);
-	//if (!refi) {
-	//  std::cerr << "couldn't find reference sequence for ref " << b1.chr_name << " for indel, on human reference " << std::endl;
-	//  return;
-	//}
-	//ref = std::string(refi);
-	//if (!ref.length()) {
-	//  ref = "N";
-	//}
 
 	// alt 
 	alt = ref + insertion;
       
-	//if (refi)
-	//  free(refi);
-
       // deletion
       } else {	
 
@@ -1284,22 +1237,10 @@ void BreakPoint::__format_bx_string() {
 	} catch (const std::invalid_argument& ia) {
 	  ref = std::string(std::abs(b1.gr.pos1 - b2.gr.pos1), 'N');
 	  std::cerr << "Caught exception in BreakPoint:setRefAlt for indel ref: " << ia.what() << std::endl;	  
-	  //std::cerr << "PIECE 2 couldn't find reference sequence for ref " << b1.chr_name << " for indel, on human reference " << std::endl;
-	  //std::cerr << (*this) << std::endl;
-	  //exit(EXIT_FAILURE); //debug
 	}
 	
-	//char * refi = faidx_fetch_seq(main_findex, const_cast<char*>(b1.chr_name.c_str()), b1.gr.pos1-1, b2.gr.pos1-2, &len);
-	//if (!refi) {
-	//  std::cerr << "couldn't find reference sequence for ref " << b1.chr_name << " for indel, on human reference " << std::endl;
-	//  return;
-	//}
-	//ref = std::string(refi);
-	//if (!ref.length())
-	//  ref = "N";
 	alt = ref.substr(0,1);
-	//if (refi)
-	//  free(refi);
+
       }
     }
 
@@ -1311,9 +1252,6 @@ void BreakPoint::__format_bx_string() {
       std::cerr << " ALT empty " << (*this) << " " << b1.chr_name << " b1.gr " << b1.gr << std::endl;
       alt = "N";
     }
-	
-    //assert(!ref.empty());
-    //assert(!alt.empty());
   }
 
   int BreakPoint::getSpan() const { 
@@ -1476,7 +1414,7 @@ ReducedBreakPoint::ReducedBreakPoint(const std::string &line, const SeqLib::BamH
     }
 
     // adjust the coverage to be more in line with restrictions on ALT.
-    // namely that ALT reads must overlap the variant site by more than T_SPLIT_BUFF
+    // namely that ALT reads must overlap the variant site by more than this_tbuff
     // bases, but the raw cov calc does not take this into account. Therefore, adjust here
     double a_cov;
     if (readlen) {

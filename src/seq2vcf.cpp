@@ -24,7 +24,7 @@ static pthread_mutex_t lock;
 
 namespace opt {
   static bool no_unfiltered = false;
-  static int max_coverage = 100;
+  static int max_coverage = 1000;
   static std::string refgenome;
   static std::string bam;
   static std::string analysis_id = "s2v";
@@ -104,28 +104,15 @@ void runSeqToVCF(int argc, char** argv) {
   std::string bps_name = opt::analysis_id + ".bps.txt.gz";
   std::string aln_name = opt::analysis_id + ".alignments.txt.gz";
   bps_file.open(bps_name.c_str(), std::ios::out);
+
+  // give header
+  bps_file << BreakPoint::header() << std::endl;
+
   //aln_file.open(aln_name.c_str(), std::ios::out);
 
   // Create the queue and consumer (worker) threads
   WorkQueue<LongReaderWorkItem*>  queue; // queue of work items to be processed by threads
   std::vector<ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>*> threadqueue;
-
-  std::cerr << "...starting sv parsing threads" << std::endl;
-  // establish and start the threads
-  for (int i = 0; i < opt::cores; i++) {
-    LongReaderThreadItem * ti =  new LongReaderThreadItem(i, opt::short_bams); // create the thread-specific data
-    ti->bps_file = &bps_file;
-    //ti->aln_file = &aln_file;
-    if (!ti->LoadReference(opt::refgenome)) {
-      std::cerr << "ERROR could not load reference genome " << opt::refgenome << std::endl;
-      exit(EXIT_FAILURE);
-    }
-      
-    ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>* threadr = // establish new thread to draw from queue
-      new ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>(queue, ti);
-    threadr->start(); 
-    threadqueue.push_back(threadr); // add thread to the threadqueue
-  }
 
   // loop through and add jobs to the queue
   size_t count = 0;
@@ -159,17 +146,10 @@ void runSeqToVCF(int argc, char** argv) {
     else {
       curr_name = r.Qname();
       assert(brv.size());
+
       // only add if multi-part alignment or has gapped alignment
-      int max_mapq = 0;
-      for (const auto& a : brv)
-	max_mapq = a.MapQuality() > max_mapq ? a.MapQuality() : max_mapq;
-	
-      if (brv.size() > 1 || brv[0].MaxDeletionBases() || brv[0].MaxInsertionBases()) { 
-	if (max_mapq >= 10 && brv[0].Length() > 500) {
-	  LongReaderWorkItem * item = new LongReaderWorkItem(ContigElement(brv, regions));
-	  queue.add(item);
-	}
-      }
+      assign_contig(brv, queue, regions);
+
       brv.clear();
       regions = SeqLib::GRC(); // create a new one
 
@@ -178,13 +158,38 @@ void runSeqToVCF(int argc, char** argv) {
     }
 
   }
+
+  // assign the last one
+  assign_contig(brv, queue, regions);
     
   std::cerr << "...processing " << SeqLib::AddCommas(queue.size()) << " contigs" << std::endl;
+  opt::cores = opt::cores > queue.size() ? queue.size() : opt::cores; 
+
+  std::cerr << "...starting sv parsing threads" << std::endl;
+  // establish and start the threads
+  for (int i = 0; i < opt::cores; i++) {
+    LongReaderThreadItem * ti =  new LongReaderThreadItem(i, opt::short_bams); // create the thread-specific data
+    ti->bps_file = &bps_file;
+    //ti->aln_file = &aln_file;
+    if (!ti->LoadReference(opt::refgenome)) {
+      std::cerr << "ERROR could not load reference genome " << opt::refgenome << std::endl;
+      exit(EXIT_FAILURE);
+    }
+      
+    ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>* threadr = // establish new thread to draw from queue
+      new ConsumerThread<LongReaderWorkItem, LongReaderThreadItem>(queue, ti);
+    threadr->start(); 
+    threadqueue.push_back(threadr); // add thread to the threadqueue
+  }
 
   // wait for the threads to finish
   for (int i = 0; i < opt::cores; ++i)  {
     threadqueue[i]->join();
   }
+
+  // write whatever remains
+  for (const auto& c : threadqueue) 
+    c->GetThreadData()->WriteFiles(&lock);
 
   // close the text files
   //aln_file.close();
@@ -237,8 +242,6 @@ void runSeqToVCF(int argc, char** argv) {
 // process an individual contig
 bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
 
-  std::vector<AlignedContig> this_alc;
-
   // contruct the BWA index of the long seq, for read realignment
   SeqLib::UnalignedSequenceVector usv;
   assert(m_contig.brv[0].Qname().length());
@@ -276,32 +279,29 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
     grab_reads(reader.first, reader.second, m_contig.regions, reads,
 	       covs[reader.first]);
   }
-    
+
   // make the actual AligneContig
-  this_alc.push_back(AlignedContig(m_contig.brv, prefixes));
-  assert(this_alc.size() == 1);
-  AlignedContig * ac = &this_alc.back();
-  //for (auto& kk : ac->m_frag_v) // set max indel for all of the frags
-  //  kk.m_max_indel = 20;
+  AlignedContig ac(m_contig.brv, prefixes);
 
   // align reads to contigs
-  alignReadsToContigs(hdr, bw, usv, reads, *ac, &thread_item->ref);
+  alignReadsToContigs(hdr, bw, usv, reads, ac, &thread_item->ref);
 
   // score read alignments
   // Get contig coverage, discordant matching to contigs, etc
   // repeat sequence filter
-  ac->assessRepeats();
+  ac.assessRepeats();
   
-  ac->splitCoverage();
+  ac.splitCoverage();
   // now that we have all the break support, check that the complex breaks are OK
-  ac->refilterComplex(); 
+  ac.refilterComplex(); 
   // add discordant reads support to each of the breakpoints
-  //ac->addDiscordantCluster(dmap);
+  //ac.addDiscordantCluster(dmap);
   // add in the cigar matches
-  //ac->checkAgainstCigarMatches(cigmap);
+  //ac.checkAgainstCigarMatches(cigmap);
 
   // false says dont worry about "local"
-  std::vector<BreakPoint> allbreaks = ac->getAllBreakPoints(false); 
+  std::vector<BreakPoint> allbreaks = ac.getAllBreakPoints(false); 
+
   for (auto& i : allbreaks)
     i.repeatFilter();
   for (auto& i : allbreaks)
@@ -313,11 +313,12 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
 
   // write the breakpoints to this thread
   bool no_reads = true;
-  for (auto& i : allbreaks)
+  for (auto& i : allbreaks) {
     thread_item->bps << i.toFileString(no_reads) << std::endl;
+  }
 
   //write the alignments to file
-  //thread_item->aln << *ac << std::endl;
+  //thread_item->aln << ac << std::endl;
 
   // clear coverage data
   for (auto& c : covs)
@@ -461,4 +462,16 @@ std::string fileDateString() {
     month << now->tm_mon+1;
   mdate << (now->tm_year + 1900) << month.str() <<  now->tm_mday;
   return mdate.str();
+}
+
+void assign_contig(const SeqLib::BamRecordVector& brv, WorkQueue<LongReaderWorkItem*>& queue, 
+		   const SeqLib::GRC& regions) {
+  
+  // only add if multi-part alignment or has gapped alignment
+  int max_mapq = 0;
+  for (const auto& a : brv)
+    max_mapq = a.MapQuality() > max_mapq ? a.MapQuality() : max_mapq;
+  if (brv.size() > 1 || brv[0].MaxDeletionBases() || brv[0].MaxInsertionBases())
+    if (max_mapq >= -1) 
+      queue.add(new LongReaderWorkItem(ContigElement(brv, regions)));
 }

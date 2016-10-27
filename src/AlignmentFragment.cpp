@@ -213,7 +213,7 @@ void AlignmentFragment::indelCigarMatches(const std::unordered_map<std::string, 
     bp.cname = m_align.Qname();
     bp.seq = m_align.Sequence();
     assert(bp.cname.length());
-    
+
     size_t count = 0; // count to make sure we are reporting the right indel
     for (auto& i : m_cigar) { // want breaks in CONTIG coordnates, so use oriented cigar
       ++count;
@@ -244,7 +244,6 @@ void AlignmentFragment::indelCigarMatches(const std::unordered_map<std::string, 
 	bp.b2.cpos = curr/* - 1*/; 
 	bp.insertion = m_align.Sequence().substr(bp.b1.cpos+1, i.Length()); // +1 because cpos is last MATCH.
       }
-      
       // set the genome breakpoint
       if (bp.b1.cpos > 0 && count == idx) {
 	if (i.Type() == 'D') {
@@ -262,7 +261,7 @@ void AlignmentFragment::indelCigarMatches(const std::unordered_map<std::string, 
 	    bp.b2.gr.pos1 = bp.b1.gr.pos1 + 1;	
 	  } else {
 	    // GetEndPosition is 1 too high
-	    bp.b2.gr.pos1 = (m_align.PositionEnd()-1) - gcurrlen; //gcurrlen + align.Position;
+	    bp.b2.gr.pos1 = (m_align.PositionEnd()+1) - gcurrlen; // v121 -1 to +1
 	    bp.b1.gr.pos1 = bp.b2.gr.pos1 - 1;	
 	  }
 	}

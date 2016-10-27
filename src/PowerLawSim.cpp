@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <unordered_set>
 
+#include "VirSim.h"
+
 #define MAX_DUP_DEL_INV_SIZE 2000
 #define MAX_RAR_SIZE 35e6
 #define EVENT_BUFFER 4000
@@ -35,18 +37,25 @@ void PowerLawSim(const SeqLib::BamHeader& hdr, faidx_t* findex,
 
   const char TCGA[5] = "TCGA";
 
+  VirSim virsim; // simulate HPV seq
+
   // get random inserts
   std::vector<std::string> inserts;
-  std::vector<int> rsize = drawFromPower(1, 20, -2, num_breaks);
+  std::vector<std::string> virals;
+  std::vector<int> rsize = drawFromPower(1, 50, -1.5, num_breaks);
   for (int i = 0; i < num_breaks; ++i) {
-    if (rand() % 2 == 0) {
+    int rr = rand() % 2;
+    if (rr == 0) {
       inserts.push_back(std::string());
       continue;
+    } else if (false) {
+      virals.push_back(virsim.RandomSeq(rsize[i]));
+    } else {
+      std::string is(rsize[i], 'N');
+      for (size_t j = 0; j < is.length(); ++j)
+	is[j] = TCGA[rand() % 3];      
+      inserts.push_back(is);
     }
-    std::string is(rsize[i], 'N');
-    for (size_t j = 0; j < is.length(); ++j)
-      is[j] = TCGA[rand() % 3];      
-    inserts.push_back(is);
   }
 
   SVEvent e;
@@ -62,7 +71,7 @@ void PowerLawSim(const SeqLib::BamHeader& hdr, faidx_t* findex,
 
     if (rpower[i] == -1) {
 
-      etype = "INT";
+      etype = "TRA";
       ename = "tumor-" + std::to_string(i) + "-" + etype;
       if (verbose) std::cerr << "...generating inter-chr " << std::endl;
       genRandomSequence(hdr, frag, e.reg1, EVENT_BUFFER, findex, grc);
@@ -138,20 +147,22 @@ void PowerLawSim(const SeqLib::BamHeader& hdr, faidx_t* findex,
 	     << "\t+\t-\tN\t" << rpower[i] << "\tDEL\t" 
 	     << (inserts[i].empty() ? "N" : inserts[i]) << "\t" << ename << std::endl;
     // INV
-    } else if (rpower[i] < MAX_DUP_DEL_INV_SIZE && rval == 2 && false) {
+    } else if (rpower[i] < MAX_DUP_DEL_INV_SIZE && rval == 2) {
       etype = "INV";
       ename = "tumor-" + std::to_string(i) + "-" + etype;
       if (verbose) std::cerr << "...generating INV of length " << rpower[i] << std::endl;      
       genRandomSequence(hdr, frag, e.reg1, rpower[i] + EVENT_BUFFER * 2, findex, grc);
-      std::string inv_frag = frag.substr(EVENT_BUFFER, rpower[i]);
-      std::reverse(inv_frag.begin(), inv_frag.end());
-      outstring = frag.substr(0, EVENT_BUFFER) + inv_frag + frag.substr(EVENT_BUFFER, frag.length() - EVENT_BUFFER - rpower[i]);
+      std::string fragA = frag.substr(0, EVENT_BUFFER); // first half
+      std::string fragB = frag.substr(EVENT_BUFFER, rpower[i]); // second half
+      SeqLib::rcomplement(fragB);
+      //std::reverse(inv_frag.begin(), inv_frag.end());
+      outstring = fragA + inserts[i] + fragB; // + inv_frag + frag.substr(EVENT_BUFFER, frag.length() - EVENT_BUFFER - rpower[i]);
       assert(outstring.length() < EVENT_BUFFER * 10);
       events << hdr.IDtoName(e.reg1.chr) << "\t" << 
 	(e.reg1.pos1+EVENT_BUFFER) << "\t" << 
         hdr.IDtoName(e.reg1.chr) << "\t" << 
 	(e.reg1.pos1 + EVENT_BUFFER + rpower[i]) << 
-	"\t+\t-\tN\t" << rpower[i] << "\tINV\t" << 
+	"\t+\t+\tN\t" << rpower[i] << "\tINV\t" << 
 	(inserts[i].empty() ? "N" : inserts[i]) << "\t" << ename << std::endl;
     } else  {
       etype = "RAR";

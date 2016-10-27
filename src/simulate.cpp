@@ -25,6 +25,7 @@
    static uint32_t seed = 0;
    static std::string bam;
    static int nbreaks = 10;
+   static double plaw = 1.0001;
    static int nindels = 10;
    static bool scramble = false; // add scrambled inserts
 
@@ -35,15 +36,17 @@
 
  static const char *SIMULATE_USAGE_MESSAGE =
  "Usage: svlib simulate\n\n"
- "  Description: Simulate indels and breakpoints on a reference genome\n"
+ "  Description: Simulate indels and rearrangementss on a reference genome\n"
  "\n"
- "  General options\n"
- "  -G, --reference-genome               Indexed ref genome for BWA-MEM. Default (Broad): /seq/reference/...)\n"
- "  -s, --seed                           Seed for the random number generator\n"
- "  -A, --string-id                      String to name output files with (e.g. <string-id>_0_01.bam\n"
+ "  Required input\n"
+ "  -G, --reference-genome               Indexed ref genome for BWA-MEM. Default (Broad):\n"
  "  -b, --bam                            BAM file to train the simulation with\n"
- "  -R, --num-rearrangements             Number of rearrangements to simulate\n"
- "  -X, --num-indels                     Number of indels to simulate\n"
+ "  General options\n"
+ "  -s, --seed                           Seed for the random number generator [0]\n"
+ "  -a, --string-id                      String to prepend output files with [noid]\n"
+ "  -l, --power-law                      Power law to simulate sizes from (x^-l). [1.0001]\n"
+ "  -R, --num-rearrangements             Number of rearrangements to simulate [10]\n"
+ "  -X, --num-indels                     Number of indels to simulate [10]\n"
  "      --blacklist                      BED file specifying blacklist regions not to put breaks in\n"
  "\n";
 
@@ -52,7 +55,7 @@ enum {
   OPT_SCRAMBLE
 };
 
- static const char* shortopts = "hG:c:n:s:k:b:E:I:D:R:X:A:f:M:";
+ static const char* shortopts = "hG:c:n:s:k:b:E:I:D:R:X:a:f:M:l:";
  static const struct option longopts[] = {
    { "help",                 no_argument, NULL, 'h' },
    { "reference-genome",     required_argument, NULL, 'G' },
@@ -62,6 +65,7 @@ enum {
    { "num-rearrangements",   required_argument, NULL, 'R' },
    { "num-indels",           required_argument, NULL, 'X' },
    { "viral-integration",    required_argument, NULL, 'M' },
+   { "power-law",            required_argument, NULL, 'l' },
    { "blacklist",            required_argument, NULL, OPT_BLACKLIST},
    { "add-scrambled-inserts",no_argument, NULL, OPT_SCRAMBLE},
    { NULL, 0, NULL, 0 }
@@ -101,12 +105,12 @@ void fopen(const std::string& s, T& o) {
 
   std::cerr << "...opening output" << std::endl;
   std::ofstream outfasta;
-  fopen(opt::string_id + ".tumor_seq.fa", outfasta);
+  fopen(opt::string_id + ".contigs.fa", outfasta);
     
   std::ofstream events;
   fopen(opt::string_id + ".events.txt", events);
   
-  PowerLawSim(rr.Header(), findex, opt::nbreaks, -1.0001, blacklist, outfasta, events);
+  PowerLawSim(rr.Header(), findex, opt::nbreaks, -opt::plaw, blacklist, outfasta, events);
   outfasta.close();
   events.close();
 
@@ -130,7 +134,8 @@ void parseSimulationOptions(int argc, char** argv) {
     case 'b': arg >> opt::bam; break;
     case 'R': arg >> opt::nbreaks; break;
     case 'X': arg >> opt::nindels; break;
-    case 'A': arg >> opt::string_id; break;
+    case 'a': arg >> opt::string_id; break;
+    case 'l': arg >> opt::plaw; break;
     case 'M': arg >> opt::viral_count; break;
     default: die= true; 
     }

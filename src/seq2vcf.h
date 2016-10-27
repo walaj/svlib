@@ -97,4 +97,7 @@ class LongReaderWorkItem {
 
 std::string fileDateString();
 
+void assign_contig(const SeqLib::BamRecordVector& brv, WorkQueue<LongReaderWorkItem*>& queue,
+		   const SeqLib::GRC& regions);
+
 #endif

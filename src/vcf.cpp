@@ -493,8 +493,8 @@ bool VCFEntry::operator==(const VCFEntry &v) const {
 // write out somatic and germline INDEL vcfs
 void VCFFile::writeIndels(string basename, bool zip, bool onefile) const {
 
-  std::string gname = basename + ".indel.vcf.gz";
-  std::string gname_nz = basename + ".indel.vcf";
+  std::string gname = basename + "indel.vcf.gz";
+  std::string gname_nz = basename + "indel.vcf";
 
   if (onefile) {
     gname_nz = basename + "indel.vcf";
@@ -554,8 +554,8 @@ void VCFFile::writeIndels(string basename, bool zip, bool onefile) const {
 void VCFFile::writeSVs(std::string basename, bool zip, bool onefile) const {
 
   std::string gname, sname, gname_nz, sname_nz; 
-  gname = basename + ".sv.vcf.gz";
-  gname_nz = basename + "..sv.vcf";
+  gname = basename + "sv.vcf.gz";
+  gname_nz = basename + "sv.vcf";
 
   if (onefile) {
     gname    = basename + "sv.vcf.gz";
