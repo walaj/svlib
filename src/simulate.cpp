@@ -136,6 +136,7 @@ void parseSimulationOptions(int argc, char** argv) {
     case 'X': arg >> opt::nindels; break;
     case 'a': arg >> opt::string_id; break;
     case 'l': arg >> opt::plaw; break;
+    case OPT_BLACKLIST: arg >> opt::blacklist; break;
     case 'M': arg >> opt::viral_count; break;
     default: die= true; 
     }

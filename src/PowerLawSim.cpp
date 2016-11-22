@@ -63,7 +63,7 @@ void PowerLawSim(const SeqLib::BamHeader& hdr, faidx_t* findex,
   for (int i = 0; i < num_breaks; ++i) {
 
     e.number = i;
-    if (i % 500 == 0)
+    if (i % 100 == 0)
       std::cerr << "working on " << i << " of " << num_breaks << std::endl;
     
     int rval = rand() % 3;
@@ -281,13 +281,13 @@ void genRandomSequence(const SeqLib::BamHeader& hdr, std::string& s, SeqLib::Gen
 					     0.50691887, 0.55342720, 0.59806527, 0.64252937, 0.68661320, 0.72454415, 0.75989948,
 					     0.79366797, 0.82342611, 0.85016757, 0.87588214, 0.89535614, 0.91611346, 0.93196494,
 					     0.94886198, 1.00000000};
-
-  gr.chr = weightedRandom(CHR_CUMSUM_WEIGHT_X);
-  std::string chrstring = hdr.IDtoName(gr.chr);
-  char * seq = nullptr;
+  
   int len;
+  char * seq = nullptr;
   // get the first sequence
   do {
+    gr.chr = weightedRandom(CHR_CUMSUM_WEIGHT_X);
+    std::string chrstring = hdr.IDtoName(gr.chr);
     if (seq)
       free(seq);
     seq = nullptr;
@@ -298,5 +298,4 @@ void genRandomSequence(const SeqLib::BamHeader& hdr, std::string& s, SeqLib::Gen
     if (seq)
       s = std::string(seq);
   } while (!seq || s.find("N") != std::string::npos || grc.CountOverlaps(gr));
-
 }
