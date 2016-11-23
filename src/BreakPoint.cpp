@@ -773,13 +773,12 @@ BreakEnd::BreakEnd(const SeqLib::BamRecord& b) {
       confidence = "SECONDARY";
     else if ((repeat_seq.length() >= 10 && std::max(t.split, n.split) < 7) || hi_rep)
       confidence = "WEAKSUPPORTHIREP";
-    else if (num_split < 6 && getSpan() < 300 && b1.gr.strand==b2.gr.strand) 
-      confidence = "LOWQINVERSION";
-    else if ( (b1.matchlen - b1.simple < 15 || b2.matchlen - b2.simple < 15) )
-      confidence = "SIMPLESEQUENCE";
-    else if ((int)homology.length() * HOMOLOGY_FACTOR > readlen) // if homology is too high, tough to tell from mis-assemly
+    //else if (num_split < 6 && getSpan() < 300 && b1.gr.strand==b2.gr.strand) 
+    //  confidence = "LOWQINVERSION";
+    //else if ( (b1.matchlen - b1.simple < 15 || b2.matchlen - b2.simple < 15) )
+    //  confidence = "SIMPLESEQUENCE";
+    else if (readlen > 0 && (int)homology.length() * HOMOLOGY_FACTOR > readlen) // if homology is too high, tough to tell from mis-assemly
       confidence = "HIGHHOMOLOGY";
-	      
     else
       confidence = "PASS";
 

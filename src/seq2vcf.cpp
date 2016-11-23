@@ -31,6 +31,7 @@ namespace opt {
   static std::map<std::string, std::string> short_bams;
   static int pad = 0;
   static int cores = 1;
+  static int readlen = 0;
 }
 
 static std::string args = "svlib ";
@@ -96,6 +97,7 @@ void runSeqToVCF(int argc, char** argv) {
     std::cerr << "could not open BAM: " << opt::bam << std::endl;
     exit(EXIT_FAILURE);
   }
+
 
   hdr = reader.Header();
 
@@ -303,6 +305,8 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
   std::vector<BreakPoint> allbreaks = ac.getAllBreakPoints(false); 
 
   for (auto& i : allbreaks)
+    i.readlen = opt::readlen;
+  for (auto& i : allbreaks)
     i.repeatFilter();
   for (auto& i : allbreaks)
     i.addCovs(covs);
@@ -397,6 +401,9 @@ void grab_reads(const std::string& prefix, SeqLib::BamReader& reader, const SeqL
   SeqLib::BamRecord r;
   size_t count = 0;
   while (reader.GetNextRecord(r) && ++count < hard_limit) {
+
+    // update the readlength
+    opt::readlen = std::max(opt::readlen, (int)r.Length());
 
     // dont even mess with them
     if (r.CountNBases())
