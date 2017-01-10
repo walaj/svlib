@@ -61,6 +61,13 @@
    bool local;
 
    friend std::ostream& operator<<(std::ostream& out, const BreakEnd& b);
+
+   void lite() {
+     split.clear();
+     splitI.clear();
+     af.clear();
+   }
+
  };
 
  struct ReducedDiscordantCluster {
@@ -79,6 +86,9 @@
        return nullptr;
      }
    }
+
+   // define how to sort these  
+   bool operator<(const ReducedBreakPoint& bp) const;
    
    void __smart_check_free(char * p) {
      if (p)
@@ -159,6 +169,7 @@
    
    // genotype info
    double GQ = 0;
+   double NH_GQ = 0; // GQ of 0/0. Higher is more likely to be not hom ref
    std::string PL;
    std::string genotype;
    std::vector<double> genotype_likelihoods = {0,0,0};
@@ -189,6 +200,10 @@
    void fromString(const std::string& s);
 
    void __adjust_alt_counts();
+
+   void lite() {
+     supporting_reads.clear();
+   }
    
  };
  
@@ -248,6 +263,17 @@
 
    // keep track of how much of contig is covered by split
    std::pair<int,int> split_cov_bounds = std::pair<int, int>(1e5, -1); // dummy to extreme opposite vals
+
+   void lite() {
+     b1.lite();
+     b2.lite();
+     for (auto& a : allele)
+       a.second.lite();
+     split_reads.clear();
+     qnames.clear();
+     reads.clear();
+     dc.lite();
+   }
 
    void __combine_alleles();
 
@@ -372,6 +398,21 @@
      else if (dc.tcount < bp.dc.tcount)
        return false;
      
+     if (seq.length() > bp.seq.length())
+       return true;
+     else if (seq.length() < bp.seq.length())
+       return false;
+
+     if (b1.mapq > bp.b1.mapq)
+       return true;
+     else if (b1.mapq < bp.b1.mapq)
+       return false;
+
+     if (b2.mapq > bp.b2.mapq)
+       return true;
+     else if (b2.mapq < bp.b2.mapq)
+       return false;
+
      if (cname > bp.cname)
        return true;
      else if (cname < bp.cname)

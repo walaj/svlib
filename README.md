@@ -64,6 +64,21 @@ NORM=normal.shortreads.bam ## should be coordinate sorted
 svlib seqtovcf qsorted.contigs.bam -p $CORES -t $TUM -n $NORM -a output_id -G $REFHG19
 ```
 
+##### Using seqtovcf with noisy BAMs
+``seqtovcf`` can optionally use exclusion lists to avoid processing variants that 
+fall in noise regions (e.g. centromeres), or to avoid re-running the same variants
+supported by different long-sequences.
+
+```bash
+## first pass to find contigs which support a unique variant (without reads for speed)
+## -W flag will write a *.extracted.contigs.bam, so you can see which ones were chosen
+## in the case that multiple contigs support the same variant, svlib only uses the highest quality contig
+svlib seqtovcf qsorted.contigs.bam -a first_pass -G $REFHG19 -W
+gunzip -c first_pass.bps.txt.gz | cut -f20 | sort | uniq > contigs.to.process
+## second pass (with reads for genotyping)
+svlib seqtovcf qsorted.contigs.bam -L contigs.to.process -B excluded_regions.bed -a second_pass -t $TUM -n $NORM
+```
+
 Attributions
 ============
 

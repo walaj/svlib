@@ -1,7 +1,7 @@
 #include "AlignmentFragment.h"
 #include "AlignedContig.h"
 
-#define MIN_INDEL_MATCH_BRACKET 6
+#define MIN_INDEL_MATCH_BRACKET 0
 #define MAX_INDELS 10000
 #define MAX_INDEL_PER_CONTIG 100
 
@@ -185,8 +185,8 @@ void AlignmentFragment::indelCigarMatches(const std::unordered_map<std::string, 
       ++loc;
       if ( (i.Type() == 'D' || i.Type() == 'I')) {
 	assert (loc != 1 && loc != m_cigar.size()); // shuldn't start with I or D
-	bool prev_match = (m_cigar[loc-2].Type() == 'M' && m_cigar[loc-2].Length() >= MIN_INDEL_MATCH_BRACKET);
-	bool post_match = (m_cigar[loc].Type() == 'M' && m_cigar[loc].Length() >= MIN_INDEL_MATCH_BRACKET);
+	bool prev_match = (m_cigar[loc-2].Type() == 'M'/* && m_cigar[loc-2].Length() >= MIN_INDEL_MATCH_BRACKET*/);
+	bool post_match = (m_cigar[loc].Type() == 'M'/* && m_cigar[loc].Length() >= MIN_INDEL_MATCH_BRACKET*/);
 	if (loc > idx && prev_match && post_match) { // require 15M+ folowoing I/D
 	  idx = loc;
 	  break;

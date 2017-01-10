@@ -15,8 +15,8 @@
 #include "SeqLib/GenomicRegionCollection.h"
 
 #define VCF_SECONDARY_CAP 200
-#define SOMATIC_LOD 1
-
+#define SOMATIC_LOD 1 // just a dummy now. scoring is elsewhere, and output is 0 (germline) or 1 (somatic)
+#define DEDUPEPAD 200
 
 using namespace std;
 
@@ -280,7 +280,7 @@ VCFFile::VCFFile(std::string file, std::string id, const SeqLib::BamHeader& h, c
   //sv_header.addInfoField("NFRAC","1","String","Normal allelic fraction at break. -1 for undefined");
 
   sv_header.addInfoField("NUMPARTS","1","Integer","If detected with assembly, number of parts the contig maps to. Otherwise 0");
-  sv_header.addInfoField("EVDNC","1","String","Provides type of evidence for read. ASSMB is assembly only, ASDIS is assembly+discordant. DSCRD is discordant only.");
+  sv_header.addInfoField("EVDNC","1","String","Evidence for variant. ASSMB assembly only, ASDIS assembly+discordant. DSCRD discordant only, TSI_L templated-sequence insertion (local, e.g. AB or BC of an ABC), TSI_G global (e.g. AC of ABC)");
   sv_header.addInfoField("SCTG","1","String","Identifier for the long sequence");
   sv_header.addInfoField("INSERTION","1","String","Sequence insertion at the breakpoint.");
   sv_header.addInfoField("SPAN","1","Integer","Distance between the breakpoints. -1 for interchromosomal");
@@ -295,7 +295,7 @@ VCFFile::VCFFile(std::string file, std::string id, const SeqLib::BamHeader& h, c
   indel_header.addFormatField("AD", "1","Integer", "Allele depth: Number of reads supporting the variant");
   indel_header.addFormatField("DP","1","Integer","Depth of coverage: Number of reads covering site.");
   indel_header.addFormatField("GQ", "1","String", "Genotype quality (currently not supported. Always 0)");
-  indel_header.addFormatField("PL","1","Integer","Normalized likelihood of the current genotype (currently not supported, always 0)");
+  indel_header.addFormatField("PL",".","Float","Normalized likelihood of the current genotype");
   indel_header.addFormatField("SR","1","Integer","Number of spanning reads for this variants");
   indel_header.addFormatField("CR","1","Integer","Number of cigar-supported reads for this variant");
   indel_header.addFormatField("LR","1","Float","Log-odds that this variant is AF=0 vs AF>=0.5");
@@ -306,7 +306,7 @@ VCFFile::VCFFile(std::string file, std::string id, const SeqLib::BamHeader& h, c
   sv_header.addFormatField("AD", "1","Integer", "Allele depth: Number of reads supporting the variant");
   sv_header.addFormatField("DP","1","Integer","Depth of coverage: Number of reads covering site.");
   sv_header.addFormatField("GQ", "1","String", "Genotype quality (currently not supported. Always 0)");
-  sv_header.addFormatField("PL","1","Integer","Normalized likelihood of the current genotype (currently not supported, always 0)");
+  sv_header.addFormatField("PL",".","Float","Normalized likelihood of the current genotype");
   sv_header.addFormatField("SR","1","Integer","Number of spanning reads for this variants");
   sv_header.addFormatField("DR","1","Integer","Number of discordant-supported reads for this variant");
   sv_header.addFormatField("LR","1","Float","Log-odds that this variant is REF vs AF=0.5");
@@ -388,8 +388,6 @@ class GenomicRegionWithID : public SeqLib::GenomicRegion
 // deduplicate
 void VCFFile::deduplicate() {
 
-  std::cerr << "...vcf - deduping events" << endl;
-
   // create the interval tree maps
   // grv1 are left entries, grv2 are right
   // keep it sorted so grv1 always has left most
@@ -407,13 +405,12 @@ void VCFFile::deduplicate() {
   size_t count = 0;
   
   for (auto& i : entry_pairs) {
-
-    // if it's already de-duped, dont do it again
-    if (dups.count(i.first))
-      continue;
     
-    // if both ends are close (within 10) then they match
-    pad = (i.second->bp->b1.gr.chr != i.second->bp->b2.gr.chr) || std::abs(i.second->bp->b1.gr.pos1 - i.second->bp->b2.gr.pos1) > 100 ? 10 : 1;
+    if (count % 250000 == 0)
+      std::cerr << "...dedupe at " << SeqLib::AddCommas(count) << " of " << SeqLib::AddCommas(entry_pairs.size()) << std::endl;
+
+    // if both ends are close then they match
+    pad = (i.second->bp->b1.gr.chr != i.second->bp->b2.gr.chr) || std::abs(i.second->bp->b1.gr.pos1 - i.second->bp->b2.gr.pos1) > DEDUPEPAD*2 ? DEDUPEPAD : 10;
 
     ++count;
     SeqLib::GenomicIntervalVector giv1, giv2;
@@ -434,20 +431,30 @@ void VCFFile::deduplicate() {
 
     bool is_pass = i.second->e1.bp->pass; 
 
-    std::unordered_map<int, size_t> key_count;
+    std::unordered_map<int, std::pair<size_t, size_t>> key_count; // left and right is pair
+
     // loop hits to left end
-    for (auto& j : giv1)
+    for (auto& j : giv1) 
       if (grv1.at(j.value).id != i.first && ( is_pass == (grv1.at(j.value).pass) )) //j is hit. Make sure have same pass status
-	++key_count[grv1.at(j.value).id];
+	++key_count[grv1.at(j.value).id].first;
     // loop hits to right end
     for (auto& j : giv2)
       if (grv2.at(j.value).id != i.first && ( is_pass == (grv2.at(j.value).pass) )) //j is hit, grv2.at(j.value).id is key of hit
-	++key_count[grv2.at(j.value).id];
+	++key_count[grv2.at(j.value).id].second;
 
-    //loop through hit keys and if key is hit twice (1 left, 1 right), it is an overlap
+    // loop through hit keys and if key is hit twice (1 left, 1 right), it is an overlap
     for (auto& j : key_count) {
-      if (j.second == 2) { // left and right hit for this key. add 
-	dups.insert(j.first); 
+      //assert(*i.second->bp < *entry_pairs[j.first]->bp + *entry_pairs[j.first]->bp < *i.second->bp == 1); // comparator is working
+      if (j.second.first && j.second.second) { // left and right hit for this key
+ 	if (*i.second->bp < *entry_pairs[j.first]->bp) { // this has worst read coverage that what it overlaps, so mark as dup. If tie, take left-most break
+	  // check that its not a local clashing with a global, because they're supposed to be two annotations for one event
+	  if ( (!strcmp(i.second->bp->evidence, "TSI_L") && !strcmp(entry_pairs[j.first]->bp->evidence, "TSI_G")) || // strcmp of 0 is match 
+	       (!strcmp(i.second->bp->evidence, "TSI_G") && !strcmp(entry_pairs[j.first]->bp->evidence, "TSI_L")) ) 
+	    ; // don't add as a duplicate
+	  else {
+	    dups.insert(j.first); 
+	  }
+	}
       }
     }
   }

@@ -95,7 +95,7 @@ typedef std::vector<SeqLib::BamRecordVector> BamRecordClusterVector;
     std::unordered_map<std::string, SeqLib::BamRecord> reads;
     std::unordered_map<std::string, SeqLib::BamRecord> mates;
 
-    std::string m_contig = "";
+    std::string m_contig;
 
     double read_score = 0;
     double mate_score = 0;
@@ -109,6 +109,12 @@ typedef std::vector<SeqLib::BamRecordVector> BamRecordClusterVector;
     int mapq2;
 
     std::string m_id_competing; // id of discordant cluster with same span, different strands
+
+    void lite() {
+      reads.clear();
+      mates.clear();
+      counts.clear();
+    }
 
   private:    
     std::string m_id;

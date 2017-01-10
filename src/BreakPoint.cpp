@@ -711,72 +711,24 @@ BreakEnd::BreakEnd(const SeqLib::BamRecord& b) {
 
   void BreakPoint::__score_assembly_only() {
 
-
-    int span = getSpan();
-    int num_split = t.split + n.split;
-    int cov_span = split_cov_bounds.second - split_cov_bounds.first ;
-
-    // check for high repeats
-    bool hi_rep = false;
-    for (auto& rr : hirepr)
-      if (seq.find(rr) != std::string::npos)
-	hi_rep = true;
-
-    if (!b1.local && !b2.local) // added this back in snowman71. 
-      // issue is that if a read is secondary aligned, it could be 
-      // aligned to way off region. Saw cases where this happend in tumor
-      // and not normal, so false-called germline event as somatic.
-      confidence = "NOLOCAL";
-    if (has_local_alignment)
-      confidence = "LOCALMATCH";
-    else if ( num_split > 1 && ( (cov_span <= (readlen + 5 ) && cov_span > 0) || cov_span < 0) )
-      confidence = "DUPREADS"; // the same sequences keep covering the split
-    //else if (homology.length() >= 20 && (span > 1500 || span == -1) && std::max(b1.mapq, b2.mapq) < 60)
-    //  confidence = "NODISC";
-    else if ((int)seq.length() < readlen + 30)
+    if ((int)seq.length() < readlen + 30)
       confidence = "TOOSHORT";
-    else if (blacklist)
-      confidence = "BLACKLIST";
-    //else if (a.split < 7 && (span > 1500 || span == -1))  // large and inter chrom need 7+
-    ///  confidence = "NODISC";
     else if (std::max(b1.mapq, b2.mapq) <= 40 || std::min(b1.mapq, b2.mapq) <= 10) 
       confidence = "LOWMAPQ";
     else if ( std::min(b1.mapq, b2.mapq) <= 30 && a.split <= 8 ) 
       confidence = "LOWMAPQ";
-    else if (std::max(b1.nm, b2.nm) >= 10 || std::min(b1.as_frac, b2.as_frac) < 0.8) 
-      confidence = "LOWAS";
-    else if ( (std::max(b1.nm, b2.nm) >= 3 || std::min(b1.as_frac, b2.as_frac) < 0.85) && getSpan() < 0 )
-      confidence = "LOWAS";      
-    else if ((double)aligned_covered / (double)seq.length() < 0.80) // less than 80% of read is covered by some alignment
-      confidence = "LOWAS";        
     else if ( (b1.matchlen < 50 && b1.mapq < 60) || (b2.matchlen < 50 && b2.mapq < 60) )
       confidence = "LOWMAPQ";
-    else if ( std::min(b1.nm, b2.nm) >= 10)
-      confidence = "LOWMAPQ";
-    else if (a.split <= 3 && span <= 1500 && span != -1) // small with little split
-      confidence = "LOWSPLITSMALL";
-    else if (num_align == 2 && b1.gr.chr != b2.gr.chr && std::min(b1.matchlen, b2.matchlen) < 60) // inter-chr, but no disc reads, weird alignment
-      confidence = "LOWICSUPPORT";
-    else if (num_align == 2 && b1.gr.chr != b2.gr.chr && std::max(b1.nm, b2.nm) >= 3 && std::min(b1.matchlen, b2.matchlen) < 150) // inter-chr, but no disc reads, and too many nm
-      confidence = "LOWICSUPPORT";
-    else if (std::min(b1.matchlen, b2.matchlen) < 0.6 * readlen)
-      confidence = "LOWICSUPPORT";      
     else if (num_align == 2 && std::min(b1.mapq, b2.mapq) < 50 && b1.gr.chr != b2.gr.chr) // interchr need good mapq for assembly only
       confidence = "LOWMAPQ";
-    else if (std::min(b1.matchlen, b2.matchlen) < 40 || (complex_local && std::min(b1.matchlen, b2.matchlen) < 100)) // not enough evidence
-      confidence = "LOWMATCHLEN";    
     else if (std::min(b1.matchlen - homology.length(), b2.matchlen - homology.length()) < 40)
       confidence = "LOWMATCHLEN";          
     else if ((b1.sub_n && b1.mapq < 50) || (b2.sub_n && b2.mapq < 50)) // || std::max(b1.sub_n,b2.sub_n) >= 2)
       confidence = "MULTIMATCH";
     else if (secondary && std::min(b1.mapq, b2.mapq) < 30)
       confidence = "SECONDARY";
-    else if ((repeat_seq.length() >= 10 && std::max(t.split, n.split) < 7) || hi_rep)
+    else if ((repeat_seq.length() >= 10 && std::max(t.split, n.split) < 7))
       confidence = "WEAKSUPPORTHIREP";
-    //else if (num_split < 6 && getSpan() < 300 && b1.gr.strand==b2.gr.strand) 
-    //  confidence = "LOWQINVERSION";
-    //else if ( (b1.matchlen - b1.simple < 15 || b2.matchlen - b2.simple < 15) )
-    //  confidence = "SIMPLESEQUENCE";
     else if (readlen > 0 && (int)homology.length() * HOMOLOGY_FACTOR > readlen) // if homology is too high, tough to tell from mis-assemly
       confidence = "HIGHHOMOLOGY";
     else
@@ -788,89 +740,32 @@ BreakEnd::BreakEnd(const SeqLib::BamRecord& b) {
   
   void BreakPoint::__score_somatic(double NODBCUTOFF, double DBCUTOFF) {
     
-    double ratio = n.alt > 0 ? (double)t.alt / (double)n.alt : 100;
-    //double taf = t.cov > 0 ? (double)t.alt / (double)t.cov : 0;
-    bool immediate_reject = (ratio <= 12 && n.cov > 10) || n.alt >= 2; // can't call somatic with 3+ normal reads or <5x more tum than norm ALT
-
-    double somatic_ratio = 0;
-    size_t ncount = 0;
-  
-  if (evidence == "INDEL") {
-    
     // this is LOD of normal being REF vs AF = 0.5+
     // We want this to be high for a somatic call
     somatic_lod = n.LO_n;
-
-    if (rs.empty())
-      somatic_score = somatic_lod > NODBCUTOFF && !immediate_reject;
-    else
-      somatic_score = somatic_lod > DBCUTOFF && !immediate_reject;	
-
-    // reject if reall low AF and at DBSNP
-    //if (taf < 0.2 && !rs.empty())
-    //  somatic_score = 0;
-
-  } else {
     
-    somatic_lod = n.LO_n;
+    // find the somatic to normal ratio
+    double ratio = n.alt > 0 ? (double)t.alt / (double)n.alt : 100;    
 
-    // old model
-    ncount = std::max(n.split, dc.ncount);
-    somatic_ratio = ncount > 0 ? std::max(t.split,dc.tcount)/ncount : 100;
+    if (evidence == "INDEL") {
+      
+      somatic_score = somatic_lod > (rs.empty() ? NODBCUTOFF : DBCUTOFF);
+ 
+      // can't call somatic with 5+ normal reads or <5x more tum than norm ALT
+      if ((ratio <= 12 && n.cov > 10) || n.alt > 5)
+	somatic_score = 0;
+      
+    } else {
+
+      somatic_score = ratio >= MIN_SOMATIC_RATIO && n.split < 2 && dc.ncount < 2;
+
+    }
     
-    somatic_score = somatic_ratio >= MIN_SOMATIC_RATIO && n.split < 2;
-  }
-  
-  // kill all if too many normal support
-  if (n.alt > 2)
-    somatic_score = 0;
-  
   // kill if single normal read in discordant clsuter
   if (evidence == "DSCRD" && n.alt > 0)
     somatic_score = 0;
 
-  // kill if bad ratio
-  double r = n.alt > 0 ? (double)t.alt / (double)n.alt : 100;
-  if (r < 10)
-    somatic_score = 0;
-
 }
-
-  /*  void BreakPoint::__set_total_reads() {
-
-    // total unique read support
-
-    t_reads = 0;
-    n_reads = 0;
-
-    for (auto& a : allele) {
-      if (a.first.at(0) == 't')
-	t_reads += a.alt;
-      else
-	n_reads += a.alt;
-    }
-
-    //if (evidence == "ASDIS") {
-      std::unordered_set<std::string> this_reads_t;
-      std::unordered_set<std::string> this_reads_n;
-      for (auto& i : split_reads) 
-	if (!this_reads_t.count(i) && i.at(0) == 't')
-	  this_reads_t.insert(i);
-      for (auto& i : dc.reads)
-	if (!this_reads_t.count(i.first) && i.first.at(0) == 't')
-	  this_reads_t.insert(i.first);
-      for (auto& i : split_reads)
-	if (!this_reads_n.count(i) && i.at(0) == 'n')
-	  this_reads_n.insert(i);
-      for (auto& i : dc.reads)
-	if (!this_reads_n.count(i.first) && i.first.at(0) == 'n')
-	  this_reads_n.insert(i.first);
-      
-      t_reads = this_reads_t.size();
-      n_reads = this_reads_n.size();
-
-  }
-  */
 
   void BreakPoint::__score_assembly_dscrd() {
 
@@ -977,24 +872,14 @@ void BreakPoint::__score_indel(double LOD_CUTOFF, double LOD_CUTOFF_DBSNP) {
     for (auto& s : allele) 
       max_lod = std::max(max_lod, s.second.LO);
 
-    double af_t = t.cov > 0 ? (double)t.alt / (double)t.cov : 0;
-    double af_n = n.cov > 0 ? (double)n.alt / (double)n.cov : 0;
-    double af = std::max(af_t, af_n);
-
     if (b1.mapq < 10) // || std::max(b1.nm, b2.nm) > 6)
       confidence="LOWMAPQ";
-    else if (!is_refilter && (double)aligned_covered / (double)seq.length() < 0.80) // less than 80% of read is covered by some alignment
-      confidence = "LOWAS";  
     else if ((b1.sub_n && b1.mapq < 50) || (b2.sub_n && b2.mapq < 50)) 
       confidence = "MULTIMATCH";      
     else if (max_lod < LOD_CUTOFF && rs.empty()) // non db snp site
       confidence = "LOWLOD";
     else if (max_lod < LOD_CUTOFF_DBSNP && !rs.empty()) // be more permissive for dbsnp site
       confidence = "LOWLOD";
-    else if (af < 0.05) // if really low AF, get rid of 
-      confidence = "VLOWAF";
-    else if (!is_refilter && std::min(left_match, right_match) < 20) 
-      confidence = "SHORTALIGNMENT"; // no conf in indel if match on either side is too small
     else
       confidence="PASS";
     
@@ -1009,15 +894,14 @@ void BreakPoint::scoreBreakpoint(double LOD_CUTOFF, double LOD_CUTOFF_DBSNP, dou
     
     // set the evidence (INDEL, DSCRD, etc)
     __set_evidence();
+
+    __combine_alleles();
     
     // 
-    double er = repeat_seq.length() > 10 ? MAX_ERROR : ERROR_RATES[repeat_seq.length()];
-    er *= scale_errors;
-    er = er == 0 ? MIN_ERROR : er; // enforce a minimum error
+    double er = 0.005; // always low error for SVlib (assume different error mode) 
     for (auto& i : allele) {
       i.second.readlen = readlen;
       i.second.modelSelection(er);
-    __combine_alleles();
     }
 
     // kludge. make sure we have included the DC counts (should have done this arleady...)
@@ -1026,16 +910,6 @@ void BreakPoint::scoreBreakpoint(double LOD_CUTOFF, double LOD_CUTOFF_DBSNP, dou
       n.disc = dc.ncount;
     }
 
-    // scale the LOD for MAPQ    
-    int mapqr1 = b1.local ? std::max(30, b1.mapq) : b1.mapq; // if local, don't drop below 30
-    int mapqr2 = b2.local ? std::max(30, b2.mapq) : b2.mapq; // if local (aligns to within window), don't drop below 30
-    double scale = (double)( std::min(mapqr1, mapqr2) - 2 * b1.nm) / (double)60;
-    for (auto& i : allele) 
-      i.second.SLO = i.second.LO * scale;
-    t.LO = t.SLO * scale;
-    n.LO = n.SLO * scale;
-    a.LO = a.SLO * scale;
-   
     // sanity check
     int split =0;
     for (auto& i : allele) 
@@ -1043,33 +917,26 @@ void BreakPoint::scoreBreakpoint(double LOD_CUTOFF, double LOD_CUTOFF_DBSNP, dou
     assert( (split == 0 && t.split == 0 && n.split==0) || (split > 0 && (t.split + n.split > 0)));
 
     // do the scoring
-    if (evidence == "ASSMB" || (evidence == "COMPL" && (dc.ncount + dc.tcount)==0))
+    bool iscomplex = evidence.find("TSI") != std::string::npos;
+    if (evidence == "ASSMB" || (iscomplex  && (dc.ncount + dc.tcount)==0))
       __score_assembly_only();
-    if (evidence == "ASDIS" || (evidence == "COMPL" && (dc.ncount + dc.tcount))) 
+    if (evidence == "ASDIS" || (iscomplex && (dc.ncount + dc.tcount))) 
       __score_assembly_dscrd();
     if (evidence == "DSCRD")
       __score_dscrd(min_dscrd_size);
-    if (evidence == "ASDIS" && confidence != "PASS") {
+    // it failed assembly filters, but might pass discordant filters
+    if (evidence == "ASDIS" && confidence != "PASS") { 
       evidence = "DSCRD";
       __score_dscrd(min_dscrd_size);
     } else if (evidence == "INDEL") 
       __score_indel(LOD_CUTOFF, LOD_CUTOFF_DBSNP);
 
-    // 
     __score_somatic(LOD_CUTOFF_SOMATIC, LOD_CUTOFF_SOMATIC_DBSNP);
 
-    if (confidence == "PASS")
-      quality = 99;
-    else
-      quality = 0;
-    
-    double LR = -1000000;
-    for (auto& i : allele) {
-      LR = std::max(-i.second.LO_n, LR); 
-      // neg because want to evaluate likelihood that is ALT in normal 
-      // the original use was to get LL that is REF in normal (in order to call somatic)
-      // but for next filter, we want to see if we are confident in the germline call
-    }
+    // quality score is odds that read is non-homozygous reference (max 99)
+    quality = 0;
+    for (auto& a : allele)
+      quality = std::max(a.second.NH_GQ, (double)quality); 
 
     assert(getSpan() > -2);
 
@@ -1083,6 +950,43 @@ void BreakPoint::scoreBreakpoint(double LOD_CUTOFF, double LOD_CUTOFF_DBSNP, dou
     std::swap(b1, b2);
     
   }
+
+bool ReducedBreakPoint::operator<(const ReducedBreakPoint& bp) const { 
+
+  //ASDIS > ASSMB > TSI
+  if (std::strcmp(evidence,bp.evidence) < 0) // <
+    return true;
+  else if (std::strcmp(evidence, bp.evidence) > 0) // >
+    return false;
+  
+  if (nsplit > bp.nsplit) 
+    return true;
+  else if (nsplit < bp.nsplit)
+    return false;
+  
+  if (tsplit > bp.tsplit)
+    return true;
+  else if (tsplit < bp.tsplit)
+    return false;
+  
+  if (dc.ncount > bp.dc.ncount)
+    return true;
+  else if (dc.ncount < bp.dc.ncount)
+    return false;
+  
+  if (dc.tcount > bp.dc.tcount)
+    return true;
+  else if (dc.tcount < bp.dc.tcount)
+    return false;
+
+  // break the tie somehow
+  if (cname > bp.cname)
+    return true;
+  else if (cname < bp.cname)
+    return false;
+  
+  return false;
+}
 
 // format the text BX tag table (for 10X reads)x
 void BreakPoint::__format_bx_string() {

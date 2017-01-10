@@ -22,7 +22,11 @@
 
 static pthread_mutex_t lock;
 
+SeqLib::BamWriter contig_writer;
+
+static SeqLib::GRC black;
 namespace opt {
+  static bool read_tracking = false;
   static bool no_unfiltered = false;
   static int max_coverage = 1000;
   static std::string refgenome;
@@ -32,6 +36,10 @@ namespace opt {
   static int pad = 0;
   static int cores = 1;
   static int readlen = 0;
+  static std::string blacklist;
+  std::unordered_set<std::string> contig_list;
+  std::string list;
+  bool write_extracted_contigs = false;
 }
 
 static std::string args = "svlib ";
@@ -39,16 +47,19 @@ static int sample_number = 0;
 
 static SeqLib::BamHeader hdr;
 
-static const char* shortopts = "hp:P:n:t:G:a:m:";
+static const char* shortopts = "hp:P:n:t:G:a:m:B:L:W";
 static const struct option longopts[] = {
   { "help",                    no_argument, NULL, 'h' },
   { "case-bam",                required_argument, NULL, 't' },
+  { "contig-list",             required_argument, NULL, 'L' },
   { "control-bam",             required_argument, NULL, 'n' },
   { "pad",                     required_argument, NULL, 'P' },
   { "cores",                   required_argument, NULL, 'p' },
   { "reference-genome",        required_argument, NULL, 'G' },
   { "max-coverage",            required_argument, NULL, 'm' },
   { "analysis-id",             required_argument, NULL, 'a' },
+  { "write-extracted-contigs", no_argument, NULL, 'W' },
+  { "blacklist",               required_argument, NULL, 'B' },
   { NULL, 0, NULL, 0 }
 };
 
@@ -68,6 +79,8 @@ static const char *RUN_SEQTOVCF_MESSAGE =
 "  -P, --pad                           Distance to look outside of contig region for supporting reads [100]\n"
 "  -m, --max-coveage                   Downsample reads to this coverage when extracting for scoring/genotyping [100]\n"
 "  -a, --analysis-id                   A unique analysis id to prepend output files with [s2v]\n"
+"  -B, --blacklist                     BED file of regions not to consider further, e.g. centromeric\n"
+"  -L, --contig-list                   List of sequence names to only include. Names not here will not be processes.\n"
 "\n";
 
 std::string bamOptParse(std::map<std::string, std::string>& obam, std::istringstream& arg, int sample_number, const std::string& prefix) {
@@ -98,8 +111,32 @@ void runSeqToVCF(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-
   hdr = reader.Header();
+
+  // setup a way to write which contigs were extracted
+  if (opt::write_extracted_contigs) {
+    std::string obam = opt::analysis_id + ".extracted.contigs.bam";
+    std::cerr << "...will write extracted contigs to " << obam << std::endl;
+    contig_writer = SeqLib::BamWriter(); 
+    contig_writer.SetHeader(hdr);
+    contig_writer.Open(obam);
+    contig_writer.WriteHeader();
+  }
+  
+  // open blacklist
+  if (!opt::blacklist.empty()) {
+    black.ReadBED(opt::blacklist, hdr);
+    black.CreateTreeMap();
+  }
+
+  // open the contig list
+  if (!opt::list.empty()) {
+    std::ifstream fs(opt::list);
+    std::string cc;
+    while(fs >> cc)
+      opt::contig_list.insert(cc);
+    std::cerr << "...read in " << SeqLib::AddCommas(opt::contig_list.size()) << " contig names to keep " << std::endl;
+  }
 
   // open the bps
   ogzstream bps_file, aln_file;
@@ -138,6 +175,9 @@ void runSeqToVCF(int argc, char** argv) {
       r.AddZTag("MC", hdr.IDtoName(r.ChrID()));
     else 
       continue;
+    
+    if (opt::contig_list.size() && !opt::contig_list.count(r.Qname()))
+      continue;
 
     // add to existing
     if (curr_name == r.Qname())
@@ -163,6 +203,10 @@ void runSeqToVCF(int argc, char** argv) {
 
   // assign the last one
   assign_contig(brv, queue, regions);
+
+  // close the bam
+  if (contig_writer.IsOpen())
+    contig_writer.Close();
     
   std::cerr << "...processing " << SeqLib::AddCommas(queue.size()) << " contigs" << std::endl;
   opt::cores = opt::cores > queue.size() ? queue.size() : opt::cores; 
@@ -192,6 +236,20 @@ void runSeqToVCF(int argc, char** argv) {
   // write whatever remains
   for (const auto& c : threadqueue) 
     c->GetThreadData()->WriteFiles(&lock);
+
+  //std::vector<BreakPoint> bpall;
+  //for (const auto& c : threadqueue)
+  //  bpall.insert(bpall.end(), c->GetThreadData()->bp_glob.begin(), c->GetThreadData()->bp_glob.end());
+
+  //std::cerr << "...parsed " << bpall.size() << " breakpoints " << std::endl;
+
+  // de duplicate the breakpoints
+  //std::sort(bpall.begin(), bpall.end());
+  //bpall.erase( std::unique( bpall.begin(), bpall.end() ), bpall.end() );
+
+  // send breakpoints to file
+  //for (auto& i : bpall) 
+  //  bps_file << i.toFileString(!opt::read_tracking) << std::endl;
 
   // close the text files
   //aln_file.close();
@@ -284,6 +342,18 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
 
   // make the actual AligneContig
   AlignedContig ac(m_contig.brv, prefixes);
+  
+  // get the breaks, check that one is valid
+  std::vector<BreakPoint> tmpbreaks = ac.getAllBreakPoints(false); 
+  size_t blist = 0;
+  for (const auto& b : tmpbreaks)
+    blist += (black.CountOverlaps(b.b1.gr) | black.CountOverlaps(b.b2.gr)) ? 1 : 0;
+  if (blist == tmpbreaks.size()) {
+    //std::cerr << " skipping breaks " << std::endl;
+    //for (const auto& b : tmpbreaks)
+    //  std::cerr << "    " << b << std::endl;
+    return true;
+  }
 
   // align reads to contigs
   alignReadsToContigs(hdr, bw, usv, reads, ac, &thread_item->ref);
@@ -316,11 +386,18 @@ bool LongReaderWorkItem::runLR(LongReaderThreadItem* thread_item) {
     i.setRefAlt(&thread_item->ref, NULL);
 
   // write the breakpoints to this thread
-  bool no_reads = true;
-  for (auto& i : allbreaks) {
-    thread_item->bps << i.toFileString(no_reads) << std::endl;
-  }
+  //for (auto& b : allbreaks)
+  //  b.lite(); // clear out string data to make easier storage
 
+  // de duplicate the breakpoints
+  std::sort(allbreaks.begin(), allbreaks.end());
+  allbreaks.erase( std::unique( allbreaks.begin(), allbreaks.end() ), allbreaks.end() );
+
+  // add them to the global
+  for (const auto& b : allbreaks)
+    if (b.hasMinimal() || !opt::short_bams.size())
+      thread_item->bp_glob.push_back(b);
+  
   //write the alignments to file
   //thread_item->aln << ac << std::endl;
 
@@ -361,6 +438,9 @@ void parseSeqToVCFOptions(int argc, char** argv) {
     case 'G': arg >> opt::refgenome; break;
     case 'a': arg >> opt::analysis_id; break;
     case 'm': arg >> opt::max_coverage; break;
+    case 'B': arg >> opt::blacklist; break;
+    case 'W': opt::write_extracted_contigs = true; break;
+    case 'L': arg >> opt::list; break;
     case 'n': 
       tmp = bamOptParse(opt::short_bams, arg, sample_number++, "n"); break;
     case 't':  
@@ -478,7 +558,25 @@ void assign_contig(const SeqLib::BamRecordVector& brv, WorkQueue<LongReaderWorkI
   int max_mapq = 0;
   for (const auto& a : brv)
     max_mapq = a.MapQuality() > max_mapq ? a.MapQuality() : max_mapq;
-  if (brv.size() > 1 || brv[0].MaxDeletionBases() || brv[0].MaxInsertionBases())
-    if (max_mapq >= -1) 
-      queue.add(new LongReaderWorkItem(ContigElement(brv, regions)));
+  
+  SeqLib::BamRecordVector brv2;
+  
+  for (const auto& b : brv)
+    if (b.NumMatchBases() > 100) //(brv.size() > 1) || brv[0].MaxDeletionBases() >=20  || brv[0].MaxInsertionBases() >= 20)
+      brv2.push_back(b);
+
+  //if (brv[0].Qname()=="30893") {
+  //  std::cerr << " HERE " << brv[0] << std::endl;
+  //  std::cerr << " HERE " << brv2.size() << std::endl;
+  //}
+  
+  if (!brv2.size()) // no pieces had a good match
+    return;	
+
+  if ((brv2.size() > 1) || brv2[0].MaxDeletionBases() > 0  || brv2[0].MaxInsertionBases() > 0) {
+    //if (max_mapq >= -1) 
+    queue.add(new LongReaderWorkItem(ContigElement(brv2, regions)));
+    for (const auto& b : brv2)
+      contig_writer.WriteRecord(b);
+  }
 }

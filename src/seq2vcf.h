@@ -8,6 +8,7 @@
 #include "SeqLib/RefGenome.h"
 #include <map>
 #include "SeqLib/GenomicRegionCollection.h"
+#include "BreakPoint.h"
 #include "STCoverage.h"
 #include "pthread-lite.h"
 
@@ -50,12 +51,20 @@ LongReaderThreadItem(size_t i, const std::map<std::string, std::string>& map) : 
 
   /** Write the files store in this thread and clear to save mem */
   void WriteFiles(pthread_mutex_t* lock) {
+    
+    // de duplicate the breakpoints
+    std::sort(bp_glob.begin(), bp_glob.end());
+    bp_glob.erase( std::unique( bp_glob.begin(), bp_glob.end() ), bp_glob.end() );
+    
     pthread_mutex_lock(lock);
-    (*bps_file) << bps.str();
-    bps.str(std::string());
+    for (auto& b : bp_glob)
+      (*bps_file) << b.toFileString(true) << std::endl;
+    
+    //bps.str(std::string());
     //(*aln_file) << aln.str();
     //aln.str(std::string());
     pthread_mutex_unlock(lock);
+    bp_glob.clear();
   }
 
   size_t thread_id = 0; // unique id for this thread
@@ -63,6 +72,8 @@ LongReaderThreadItem(size_t i, const std::map<std::string, std::string>& map) : 
   std::stringstream bps; // stream to store BPS output
   std::stringstream aln; // stream to store ALN output
   
+  std::vector<BreakPoint> bp_glob; // store all breakpoints
+
   size_t num_processed = 0; // count number processed 
 
   // each thread has unique reader
