@@ -687,23 +687,19 @@ BreakEnd::BreakEnd(const SeqLib::BamRecord& b) {
   void BreakPoint::__set_evidence() {
 
     bool isdisc = (dc.tcount + dc.ncount) != 0;
-    //bool issplit = (t.split + n.split) != 0;
 
     if (num_align == 1)
       evidence = "INDEL";
-    else if ( isdisc && !complex && num_align != 0) //num_align == 2 )
+    else if ( isdisc && !complex && num_align > 0)
       evidence = "ASDIS";
     else if ( isdisc && num_align < 3)
       evidence = "DSCRD";
-    else if (!complex) //num_align == 2)
+    else if (!complex) 
       evidence = "ASSMB";
-    else if (complex) //num_align > 2)
-      evidence = "COMPL";
-    else {
-      //std::cerr << "cname " << cname << " num_align" << num_align << " isdisc " << " issplit "  << std::endl;
-      //assert(false);
-      
-    }
+    else if (complex && !complex_local) // is A-C of an ABC
+      evidence = "TSI_G";
+    else if (complex && complex_local) // is AB or BC of an ABC 
+      evidence = "TSI_L";
 
     assert(evidence.length());
 
@@ -848,8 +844,8 @@ BreakEnd::BreakEnd(const SeqLib::BamRecord& b) {
       confidence = "WEAKDISC";
     //else if ( getSpan() < min_span && disc_count < 12)
     //  confidence = "LOWSPAN";
-    //else 
-    //  confidence = "PASS";
+    else 
+      confidence = "PASS";
     
     assert(confidence.length());
   }
@@ -928,11 +924,15 @@ void BreakPoint::scoreBreakpoint(double LOD_CUTOFF, double LOD_CUTOFF_DBSNP, dou
     if (evidence == "ASDIS" && confidence != "PASS") { 
       evidence = "DSCRD";
       __score_dscrd(min_dscrd_size);
-    } else if (evidence == "INDEL") 
+    } else if (evidence == "INDEL") {
       __score_indel(LOD_CUTOFF, LOD_CUTOFF_DBSNP);
+    }
 
+    assert(!evidence.empty());
+    assert(!confidence.empty());
+    
     __score_somatic(LOD_CUTOFF_SOMATIC, LOD_CUTOFF_SOMATIC_DBSNP);
-
+    
     // quality score is odds that read is non-homozygous reference (max 99)
     quality = 0;
     for (auto& a : allele)
